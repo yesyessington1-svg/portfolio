@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESCAPE://MAINTENANCE_LEVEL</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&family=Orbitron:wght@400;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ========================================
+           NEURAL GRID + SIGNAL NOISE
+           Minimal. Atmospheric. Alive.
+           ======================================== */
+        
+        /* Base: near-black */
+        #loadingScreen {
+            position: relative;
+            background: #030405;
+            overflow: hidden;
+        }
+
+        /* Layer 1: Neural grid canvas */
+        #neuralCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Layer 2: Subtle noise texture */
+        .noise-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.035;
+            z-index: 2;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        /* Layer 3: Very faint scanlines */
+        .scanlines-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                transparent 2px,
+                rgba(0, 0, 0, 0.015) 2px,
+                rgba(0, 0, 0, 0.015) 4px
+            );
+        }
+
+        /* Layer 4: Soft vignette */
+        .vignette-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 0%,
+                transparent 50%,
+                rgba(0, 0, 0, 0.4) 100%
+            );
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        /* Loading content elevation */
+        .loading-content {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* ========================================
+           POLISHED MODAL STYLES
+           ======================================== */
+        
+        /* Override base modal styles */
+        .menu-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: rgba(3, 4, 5, 0.92);
+            justify-content: center;
+            align-items: center;
+            z-index: 5005;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .menu-modal-overlay.active {
+            display: flex;
+            animation: modalFadeIn 0.3s ease;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .menu-modal-content {
+            display: none;
+            background: linear-gradient(165deg, rgba(15, 25, 35, 0.98) 0%, rgba(5, 10, 20, 0.98) 100%);
+            border: 1px solid rgba(0, 255, 200, 0.15);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 550px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 
+                0 25px 80px rgba(0, 0, 0, 0.8),
+                0 0 0 1px rgba(0, 255, 200, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                0 0 60px rgba(0, 255, 200, 0.08);
+            animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .menu-modal-overlay.active .menu-modal-content {
+            display: block;
+        }
+
+        @keyframes modalSlideUp {
+            from { 
+                transform: translateY(30px) scale(0.97);
+                opacity: 0;
+            }
+            to { 
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Modal decorative elements */
+        .menu-modal-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 20px;
+            right: 20px;
+            height: 1px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(0, 255, 200, 0.4) 50%, 
+                transparent 100%
+            );
+        }
+
+        .menu-modal-content::after {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            border: 1px solid rgba(0, 255, 200, 0.03);
+            border-radius: 12px;
+            pointer-events: none;
+        }
+
+        /* Modal title */
+        .modal-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 8px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            position: relative;
+        }
+
+        .modal-subtitle {
+            text-align: center;
+            color: rgba(0, 255, 200, 0.5);
+            font-size: 0.85rem;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Modal close button */
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 36px;
+            height: 36px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1.4rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 0, 64, 0.1);
+            border-color: rgba(255, 0, 64, 0.3);
+            color: #ff4466;
+            transform: rotate(90deg);
+        }
+
+        /* ========================================
+           SETTINGS MODAL - POLISHED
+           ======================================== */
+        .settings-group {
+            margin-bottom: 24px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(0, 255, 200, 0.08);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .settings-group:hover {
+            border-color: rgba(0, 255, 200, 0.15);
+            background: rgba(0, 255, 200, 0.02);
+        }
+
+        .settings-label {
+            color: #fff;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .settings-label::before {
+            content: '';
+            width: 3px;
+            height: 16px;
+            background: var(--primary-cyan);
+            border-radius: 2px;
+        }
+
+        /* Custom slider */
+        .settings-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 255, 200, 0.1);
+            border-radius: 3px;
+            outline: none;
+            margin: 12px 0;
+            cursor: pointer;
+        }
+
+        .settings-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #00ffc8 0%, #00aa88 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 
+                0 2px 10px rgba(0, 255, 200, 0.4),
+                0 0 20px rgba(0, 255, 200, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .settings-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 
+                0 2px 15px rgba(0, 255, 200, 0.6),
+                0 0 30px rgba(0, 255, 200, 0.3);
+        }
+
+        .settings-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #00ffc8 0%, #00aa88 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            color: rgba(0, 255, 200, 0.7);
+            font-size: 0.85rem;
+            font-family: 'Fira Code', monospace;
+            margin-top: 8px;
+        }
+
+        /* Toggle switches */
+        .settings-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .settings-toggle:last-child {
+            border-bottom: none;
+        }
+
+        .toggle-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 52px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .toggle-switch.active {
+            background: rgba(0, 255, 200, 0.25);
+            border-color: rgba(0, 255, 200, 0.3);
+        }
+
+        .toggle-switch::before {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .toggle-switch.active::before {
+            transform: translateX(24px);
+            background: var(--primary-cyan);
+            box-shadow: 0 0 15px rgba(0, 255, 200, 0.5);
+        }
+
+        /* Custom select */
+        .settings-select {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 200, 0.15);
+            border-radius: 8px;
+            color: var(--primary-cyan);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2300ffc8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+        }
+
+        .settings-select:hover {
+            border-color: rgba(0, 255, 200, 0.3);
+        }
+
+        .settings-select:focus {
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
+        }
+
+        .settings-select option {
+            background: #0a1520;
+            color: #fff;
+        }
+
+        /* ========================================
+           CREDITS MODAL - POLISHED
+           ======================================== */
+        .credits-content {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .credits-section {
+            margin: 25px 0;
+            padding: 20px;
+            background: rgba(0, 255, 200, 0.02);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 255, 200, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .credits-section:hover {
+            border-color: rgba(0, 255, 200, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .credits-role {
+            color: var(--primary-cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-bottom: 10px;
+        }
+
+        .credits-name {
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .credits-detail {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .credits-quote {
+            margin-top: 35px;
+            padding: 25px;
+            border-top: 1px solid rgba(0, 255, 200, 0.1);
+            color: rgba(0, 255, 200, 0.6);
+            font-style: italic;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* ========================================
+           GAME OPTIONS - POLISHED
+           ======================================== */
+        .game-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .game-option-btn {
+            position: relative;
+            padding: 18px 24px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 200, 0.12);
+            border-radius: 10px;
+            color: #fff;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            text-align: left;
+        }
+
+        .game-option-btn::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--primary-cyan);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .game-option-btn::after {
+            content: '→';
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%) translateX(-10px);
+            opacity: 0;
+            color: var(--primary-cyan);
+            transition: all 0.3s ease;
+        }
+
+        .game-option-btn:hover {
+            background: rgba(0, 255, 200, 0.05);
+            border-color: rgba(0, 255, 200, 0.3);
+            padding-left: 30px;
+            box-shadow: 0 5px 25px rgba(0, 255, 200, 0.1);
+        }
+
+        .game-option-btn:hover::before {
+            transform: scaleY(1);
+        }
+
+        .game-option-btn:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        .game-option-btn:active {
+            transform: scale(0.98);
+        }
+
+        .option-icon {
+            margin-right: 12px;
+            color: var(--primary-cyan);
+        }
+
+        /* Warning text */
+        .modal-warning {
+            margin-top: 25px;
+            padding: 15px;
+            background: rgba(255, 0, 64, 0.05);
+            border: 1px solid rgba(255, 0, 64, 0.15);
+            border-radius: 8px;
+            color: rgba(255, 100, 100, 0.9);
+            font-size: 0.85rem;
+            text-align: center;
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* ========================================
+           SAVE SLOTS - POLISHED
+           ======================================== */
+        .save-slots {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .save-slot {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 200, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .save-slot:hover {
+            border-color: rgba(0, 255, 200, 0.3);
+            background: rgba(0, 255, 200, 0.03);
+            transform: translateX(5px);
+        }
+
+        .save-slot.empty {
+            border-style: dashed;
+            opacity: 0.7;
+        }
+
+        .save-slot.empty:hover {
+            opacity: 1;
+        }
+
+        .save-info {
+            text-align: left;
+        }
+
+        .save-name {
+            color: #fff;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            letter-spacing: 0.05em;
+        }
+
+        .save-details {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.8rem;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .save-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .save-action-btn {
+            padding: 10px 18px;
+            background: rgba(255, 0, 64, 0.08);
+            border: 1px solid rgba(255, 0, 64, 0.25);
+            border-radius: 6px;
+            color: #ff6666;
+            font-size: 0.75rem;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .save-action-btn:hover {
+            background: rgba(255, 0, 64, 0.15);
+            border-color: rgba(255, 0, 64, 0.4);
+        }
+
+        .save-action-btn.play-btn {
+            background: rgba(0, 255, 200, 0.08);
+            border-color: rgba(0, 255, 200, 0.25);
+            color: var(--primary-cyan);
+        }
+
+        .save-action-btn.play-btn:hover {
+            background: rgba(0, 255, 200, 0.15);
+            border-color: rgba(0, 255, 200, 0.4);
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.15);
+        }
+
+        /* Delete confirmation */
+        .delete-confirm {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 10, 20, 0.98);
+            border-radius: 16px;
+            padding: 40px;
+            z-index: 10;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .delete-confirm.active {
+            display: flex;
+        }
+
+        .delete-confirm h3 {
+            color: #ff4466;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+        }
+
+        .delete-confirm p {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        .delete-confirm-btns {
+            display: flex;
+            gap: 15px;
+        }
+
+        /* Exit modal buttons */
+        .exit-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .exit-btn {
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .exit-btn.danger {
+            background: rgba(255, 0, 64, 0.1);
+            border: 1px solid rgba(255, 0, 64, 0.3);
+            color: #ff4466;
+        }
+
+        .exit-btn.danger:hover {
+            background: rgba(255, 0, 64, 0.2);
+            border-color: #ff4466;
+            box-shadow: 0 0 25px rgba(255, 0, 64, 0.2);
+        }
+
+        .exit-btn.safe {
+            background: rgba(0, 255, 200, 0.1);
+            border: 1px solid rgba(0, 255, 200, 0.3);
+            color: var(--primary-cyan);
+        }
+
+        .exit-btn.safe:hover {
+            background: rgba(0, 255, 200, 0.2);
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 25px rgba(0, 255, 200, 0.2);
+        }
+
+        /* Scrollbar for modals */
+        .menu-modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .menu-modal-content::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        .menu-modal-content::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 200, 0.2);
+            border-radius: 3px;
+        }
+
+        .menu-modal-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 255, 200, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen Container -->
+    <div id="loadingContainer">
+        <!-- Warning flash -->
+        <div class="warning-flash">WARNING: UNAUTHORIZED ACCESS DETECTED</div>
+
+        <!-- Loading Screen -->
+        <div id="loadingScreen">
+            <!-- Layer 1: Neural grid -->
+            <canvas id="neuralCanvas"></canvas>
+            
+            <!-- Layer 2: Noise -->
+            <div class="noise-layer"></div>
+            
+            <!-- Layer 3: Scanlines -->
+            <div class="scanlines-layer"></div>
+            
+            <!-- Layer 4: Vignette -->
+            <div class="vignette-layer"></div>
+
+            <!-- Main content -->
+            <div class="loading-content">
+                <div class="menu-terminal-line">
+                    &gt; system.breach.detected<span class="cursor"></span>
+                </div>
+                
+                <h1 class="main-title">CYBER_BREACH</h1>
+                <p class="subtitle">Reality Compromised</p>
+                
+                <div class="loading-container">
+                    <div class="loading-track">
+                        <div class="loading-bar" id="loadingBar"></div>
+                    </div>
+                    <div class="loading-text" id="loadingText">Initializing...</div>
+                </div>
+                
+                <div class="enter-container" id="enterContainer" style="opacity: 0; pointer-events: none;">
+                    <button class="enter-btn" id="enterBtn" onclick="showMainMenu()">ENTER SYSTEM</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Menu -->
+        <div id="mainMenu">
+            <div class="menu-container">
+                <h2 class="menu-title">CYBER_BREACH</h2>
+                <div class="menu-buttons">
+                    <button class="menu-btn" onclick="startGame()">PLAY</button>
+                    <button class="menu-btn" onclick="openSettings()">SETTINGS</button>
+                    <button class="menu-btn" onclick="showCredits()">CREDITS</button>
+                    <button class="menu-btn" onclick="exitGame()">EXIT</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="menu-modal-overlay">
+            <div class="menu-modal-content">
+                <button class="modal-close" onclick="closeMenuModal('settingsModal')">&times;</button>
+                <h2 class="modal-title">Settings</h2>
+                <div class="modal-subtitle">System Configuration</div>
+                
+                <div class="settings-group">
+                    <div class="settings-label">Audio Volume</div>
+                    <input type="range" class="settings-slider" id="volumeSlider" min="0" max="100" value="75" oninput="updateSliderValue(this, 'volumeValue')">
+                    <div class="slider-value">Master: <span id="volumeValue">75</span>%</div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-label">Graphics Quality</div>
+                    <input type="range" class="settings-slider" id="qualitySlider" min="1" max="3" value="2" oninput="updateQualityValue(this)">
+                    <div class="slider-value">Quality: <span id="qualityValue">Medium</span></div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-label">Interface Options</div>
+                    <div class="settings-toggle">
+                        <span class="toggle-label">Screen Effects</span>
+                        <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
+                    </div>
+                    <div class="settings-toggle">
+                        <span class="toggle-label">Auto-Save</span>
+                        <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
+                    </div>
+                    <div class="settings-toggle">
+                        <span class="toggle-label">Notifications</span>
+                        <div class="toggle-switch" onclick="toggleSwitch(this)"></div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-label">Control Scheme</div>
+                    <select class="settings-select">
+                        <option>Default (WASD + Mouse)</option>
+                        <option>Alternative (Arrow Keys)</option>
+                        <option>Custom</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Credits Modal -->
+        <div id="creditsModal" class="menu-modal-overlay">
+            <div class="menu-modal-content">
+                <button class="modal-close" onclick="closeMenuModal('creditsModal')">&times;</button>
+                <h2 class="modal-title">Credits</h2>
+                <div class="modal-subtitle">The Team Behind the Breach</div>
+                
+                <div class="credits-content">
+                    <div class="credits-section">
+                        <div class="credits-role">Project Lead</div>
+                        <div class="credits-name">RaphFunds</div>
+                    </div>
+                    
+                    <div class="credits-section">
+                        <div class="credits-role">Development</div>
+                        <div class="credits-name">Cybersecurity Education Framework</div>
+                        <div class="credits-detail">Interactive Learning Systems</div>
+                    </div>
+                    
+                    <div class="credits-section">
+                        <div class="credits-role">Design Philosophy</div>
+                        <div class="credits-detail">"Breaking barriers between reality and digital security"</div>
+                    </div>
+                    
+                    <div class="credits-section">
+                        <div class="credits-role">Created For</div>
+                        <div class="credits-name">SciTech Evo 2025</div>
+                        <div class="credits-detail">Educational Cybersecurity Initiative</div>
+                    </div>
+                    
+                    <div class="credits-quote">
+                        "In cyberspace, knowledge is the ultimate firewall."
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Start Modal -->
+        <div id="gameModal" class="menu-modal-overlay">
+            <div class="menu-modal-content">
+                <button class="modal-close" onclick="closeMenuModal('gameModal')">&times;</button>
+                <h2 class="modal-title">Start Mission</h2>
+                <div class="modal-subtitle">Select Entry Point</div>
+                
+                <div class="game-options">
+                    <button class="game-option-btn" onclick="startMission('tutorial')">
+                        <span class="option-icon">▸</span> Tutorial: Learn the Basics
+                    </button>
+                    <button class="game-option-btn" onclick="openSaveModal()">
+                        <span class="option-icon">▸</span> Story Mode: The Breach Protocol
+                    </button>
+                </div>
+                
+                <div class="modal-warning">
+                    ⚠ WARNING: Unauthorized access may result in system consequences
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Slots Modal -->
+        <div id="saveModal" class="menu-modal-overlay">
+            <div class="menu-modal-content">
+                <button class="modal-close" onclick="closeMenuModal('saveModal')">&times;</button>
+                <h2 class="modal-title">Save Files</h2>
+                <div class="modal-subtitle">Select or Create</div>
+                
+                <div class="save-slots" id="saveSlots">
+                    <!-- Save slots populated by JS -->
+                </div>
+
+                <!-- Delete confirmation overlay -->
+                <div class="delete-confirm" id="deleteConfirm">
+                    <h3>⚠ DELETE SAVE DATA?</h3>
+                    <p>This action cannot be undone.</p>
+                    <div class="delete-confirm-btns">
+                        <button class="save-action-btn" onclick="confirmDelete()">DELETE</button>
+                        <button class="save-action-btn play-btn" onclick="cancelDelete()">CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exit Confirmation Modal -->
+        <div id="exitModal" class="menu-modal-overlay">
+            <div class="menu-modal-content" style="max-width: 420px;">
+                <h2 class="modal-title">Exit</h2>
+                <div class="modal-subtitle">Disconnect Protocol</div>
+                
+                <p style="text-align: center; color: rgba(255, 255, 255, 0.7); line-height: 1.8; margin-top: 20px;">
+                    Disconnecting from the system will terminate all active processes.
+                </p>
+                <p style="text-align: center; color: rgba(255, 100, 100, 0.9); margin-top: 15px;">
+                    Are you sure you want to exit?
+                </p>
+                
+                <div class="exit-buttons">
+                    <button class="exit-btn danger" onclick="confirmExit()">Terminate</button>
+                    <button class="exit-btn safe" onclick="closeMenuModal('exitModal')">Stay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SAVE SYSTEM - LocalStorage Keys
+        // ========================================
+        const SAVE_KEYS = [
+            'cyberBreach_save_1',
+            'cyberBreach_save_2', 
+            'cyberBreach_save_3'
+        ];
+
+        let deleteTargetSlot = null;
+
+        function getSaveData(slotIndex) {
+            const key = SAVE_KEYS[slotIndex];
+            const data = localStorage.getItem(key);
+            if (data) {
+                try {
+                    return JSON.parse(data);
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        function setSaveData(slotIndex, data) {
+            const key = SAVE_KEYS[slotIndex];
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        function deleteSaveData(slotIndex) {
+            const key = SAVE_KEYS[slotIndex];
+            localStorage.removeItem(key);
+        }
+
+        function createNewSave(slotIndex) {
+            const saveData = {
+                exists: true,
+                timestamp: new Date().toISOString(),
+                chapter: 'Prologue',
+                playTime: 0
+            };
+            setSaveData(slotIndex, saveData);
+            return saveData;
+        }
+
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function formatPlayTime(minutes) {
+            if (minutes < 60) return `${minutes}m`;
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hours}h ${mins}m`;
+        }
+
+        function renderSaveSlots() {
+            const container = document.getElementById('saveSlots');
+            container.innerHTML = '';
+
+            for (let i = 0; i < 3; i++) {
+                const saveData = getSaveData(i);
+                const slot = document.createElement('div');
+                slot.className = 'save-slot' + (saveData ? '' : ' empty');
+                
+                if (saveData && saveData.exists) {
+                    slot.innerHTML = `
+                        <div class="save-info">
+                            <div class="save-name">SAVE FILE ${i + 1}</div>
+                            <div class="save-details">
+                                ${saveData.chapter} · ${formatPlayTime(saveData.playTime)} · ${formatTimestamp(saveData.timestamp)}
+                            </div>
+                        </div>
+                        <div class="save-actions">
+                            <button class="save-action-btn play-btn" onclick="event.stopPropagation(); loadSave(${i})">CONTINUE</button>
+                            <button class="save-action-btn" onclick="event.stopPropagation(); promptDelete(${i})">DELETE</button>
+                        </div>
+                    `;
+                } else {
+                    slot.innerHTML = `
+                        <div class="save-info">
+                            <div class="save-name">EMPTY SLOT ${i + 1}</div>
+                            <div class="save-details">No save data</div>
+                        </div>
+                        <div class="save-actions">
+                            <button class="save-action-btn play-btn" onclick="event.stopPropagation(); newGame(${i})">NEW GAME</button>
+                        </div>
+                    `;
+                }
+                
+                container.appendChild(slot);
+            }
+        }
+
+        function openSaveModal() {
+            renderSaveSlots();
+            openMenuModal('saveModal');
+        }
+
+        function loadSave(slotIndex) {
+            localStorage.setItem('cyberBreach_currentSlot', slotIndex.toString());
+            closeMenuModal('saveModal');
+            closeMenuModal('gameModal');
+            window.location.href = 'cutscene.html';
+        }
+
+        function newGame(slotIndex) {
+            createNewSave(slotIndex);
+            localStorage.setItem('cyberBreach_currentSlot', slotIndex.toString());
+            closeMenuModal('saveModal');
+            closeMenuModal('gameModal');
+            window.location.href = 'cutscene.html';
+        }
+
+        function promptDelete(slotIndex) {
+            deleteTargetSlot = slotIndex;
+            document.getElementById('deleteConfirm').classList.add('active');
+        }
+
+        function confirmDelete() {
+            if (deleteTargetSlot !== null) {
+                deleteSaveData(deleteTargetSlot);
+                deleteTargetSlot = null;
+                document.getElementById('deleteConfirm').classList.remove('active');
+                renderSaveSlots();
+            }
+        }
+
+        function cancelDelete() {
+            deleteTargetSlot = null;
+            document.getElementById('deleteConfirm').classList.remove('active');
+        }
+
+        // ========================================
+        // Settings Helpers
+        // ========================================
+        function updateSliderValue(slider, valueId) {
+            document.getElementById(valueId).textContent = slider.value;
+        }
+
+        function updateQualityValue(slider) {
+            const labels = ['Low', 'Medium', 'High'];
+            document.getElementById('qualityValue').textContent = labels[slider.value - 1];
+        }
+
+        // ========================================
+        // NEURAL GRID - Minimal, atmospheric
+        // 30 nodes, thin lines, slow drift
+        // ========================================
+        class NeuralGrid {
+            constructor() {
+                this.canvas = document.getElementById('neuralCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.nodes = [];
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                this.init();
+                this.animate();
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            init() {
+                // 30 sparse nodes
+                const nodeCount = 30;
+                for (let i = 0; i < nodeCount; i++) {
+                    this.nodes.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        // Very slow drift
+                        vx: (Math.random() - 0.5) * 0.15,
+                        vy: (Math.random() - 0.5) * 0.15,
+                        // Each node pulses at its own rate
+                        phase: Math.random() * Math.PI * 2,
+                        baseAlpha: 0.15 + Math.random() * 0.2
+                    });
+                }
+            }
+
+            animate() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                const time = Date.now() * 0.0005; // Slow time
+
+                // Update node positions (slow drift)
+                for (const node of this.nodes) {
+                    node.x += node.vx;
+                    node.y += node.vy;
+                    
+                    // Soft wrap around edges
+                    if (node.x < -50) node.x = this.canvas.width + 50;
+                    if (node.x > this.canvas.width + 50) node.x = -50;
+                    if (node.y < -50) node.y = this.canvas.height + 50;
+                    if (node.y > this.canvas.height + 50) node.y = -50;
+                }
+
+                // Draw connections first (behind nodes)
+                const maxDist = 200;
+                for (let i = 0; i < this.nodes.length; i++) {
+                    for (let j = i + 1; j < this.nodes.length; j++) {
+                        const dx = this.nodes[i].x - this.nodes[j].x;
+                        const dy = this.nodes[i].y - this.nodes[j].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < maxDist) {
+                            // Fade based on distance
+                            const alpha = (1 - dist / maxDist) * 0.08;
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(this.nodes[i].x, this.nodes[i].y);
+                            this.ctx.lineTo(this.nodes[j].x, this.nodes[j].y);
+                            this.ctx.strokeStyle = `rgba(0, 200, 180, ${alpha})`;
+                            this.ctx.lineWidth = 0.5;
+                            this.ctx.stroke();
+                        }
+                    }
+                }
+
+                // Draw nodes with subtle pulse
+                for (const node of this.nodes) {
+                    const pulse = Math.sin(time * 2 + node.phase) * 0.5 + 0.5;
+                    const alpha = node.baseAlpha * (0.6 + pulse * 0.4);
+                    
+                    // Soft glow
+                    const gradient = this.ctx.createRadialGradient(
+                        node.x, node.y, 0,
+                        node.x, node.y, 4
+                    );
+                    gradient.addColorStop(0, `rgba(0, 220, 190, ${alpha})`);
+                    gradient.addColorStop(1, 'transparent');
+                    
+                    this.ctx.beginPath();
+                    this.ctx.arc(node.x, node.y, 4, 0, Math.PI * 2);
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fill();
+                    
+                    // Tiny bright center
+                    this.ctx.beginPath();
+                    this.ctx.arc(node.x, node.y, 1, 0, Math.PI * 2);
+                    this.ctx.fillStyle = `rgba(0, 255, 220, ${alpha * 0.8})`;
+                    this.ctx.fill();
+                }
+
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // ========================================
+        // Loading Screen
+        // ========================================
+        function showLoadingScreen() {
+            const loadingContainer = document.getElementById('loadingContainer');
+            loadingContainer.style.display = 'flex';
+            
+            // Initialize the neural grid
+            new NeuralGrid();
+            
+            const loadingBar = document.getElementById('loadingBar');
+            const loadingText = document.getElementById('loadingText');
+            const enterContainer = document.getElementById('enterContainer');
+            
+            let progress = 0;
+            const loadingMessages = [
+                'Initializing...',
+                'Loading neural pathways...',
+                'Establishing connection...',
+                'Breach detected...',
+                'System ready.'
+            ];
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 8;
+                if (progress > 100) progress = 100;
+                
+                loadingBar.style.width = progress + '%';
+                
+                const messageIndex = Math.floor((progress / 100) * loadingMessages.length);
+                if (messageIndex < loadingMessages.length) {
+                    loadingText.textContent = loadingMessages[messageIndex];
+                }
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        loadingBar.style.width = '100%';
+                        loadingText.textContent = 'Complete';
+                        enterContainer.style.opacity = '1';
+                        enterContainer.style.pointerEvents = 'auto';
+                    }, 500);
+                }
+            }, 150);
+        }
+
+        function showMainMenu() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainMenu = document.getElementById('mainMenu');
+            
+            loadingScreen.style.animation = 'textGlitch 0.5s';
+            
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+                mainMenu.classList.add('active');
+            }, 500);
+        }
+
+        function startGame() {
+            openMenuModal('gameModal');
+        }
+
+        function openSettings() {
+            openMenuModal('settingsModal');
+        }
+
+        function showCredits() {
+            openMenuModal('creditsModal');
+        }
+
+        function exitGame() {
+            openMenuModal('exitModal');
+        }
+
+        function openMenuModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('active');
+            }
+        }
+
+        function closeMenuModal(modalId) {
+            if (modalId) {
+                const modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.classList.remove('active');
+                }
+            }
+        }
+
+        function toggleSwitch(element) {
+            element.classList.toggle('active');
+        }
+
+        function startMission(missionType) {
+            closeMenuModal('gameModal');
+            if (missionType === 'tutorial') {
+                window.location.href = 'tutorial.html';
+            }
+        }
+
+        function confirmExit() {
+            document.body.style.animation = 'textGlitch 1s';
+            setTimeout(() => {
+                window.close();
+            }, 1000);
+        }
+
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('menu-modal-overlay')) {
+                e.target.classList.remove('active');
+            }
+        });
+
+        // ========================================
+        // Initialize
+        // ========================================
+        window.onload = function() {
+            showLoadingScreen();
+        };
+    </script>
+</body>
+</html>

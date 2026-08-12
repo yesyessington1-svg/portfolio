@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="demo-api.js"></script>
+<!-- demo backend: re-implements the game API in the browser, no server needed -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHRONOLOOP — Where History Becomes Strategy</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0a0b0f;
+  --bg-primary: #0f1117;
+  --bg-card: #151720;
+  --bg-card-hover: #1a1d2a;
+  --bg-surface: #1c1f2e;
+  --border-subtle: rgba(255,215,120,0.08);
+  --border-medium: rgba(255,215,120,0.15);
+  --gold-primary: #d4a853;
+  --gold-light: #f0d48a;
+  --gold-dim: #8a7034;
+  --gold-glow: rgba(212,168,83,0.3);
+  --text-primary: #e8e4dc;
+  --text-secondary: #9b978e;
+  --text-muted: #5e5b54;
+  --accent-teal: #4a9e8e;
+  --accent-rose: #c45c5c;
+  --accent-blue: #5b7fb8;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  --font-typewriter: 'Special Elite', 'Courier New', monospace;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--gold-dim) var(--bg-deep); }
+body { font-family: var(--font-body); background: var(--bg-deep); color: var(--text-primary); overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
+
+/* ═══ INTRO CUTSCENE ═══ */
+#introCutscene {
+  position: fixed; inset: 0; z-index: 15000;
+  background: #06050a;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  transition: opacity 1.2s ease;
+}
+#introCutscene.fade-out { opacity: 0; pointer-events: none; }
+#introCanvas { position: absolute; inset: 0; z-index: 0; }
+
+.old-paper {
+  position: absolute; z-index: 2;
+  background: linear-gradient(145deg, #2a2318 0%, #1e1a12 30%, #231f15 60%, #1a1710 100%);
+  border: 1px solid rgba(180,150,90,0.08);
+  padding: 1.6rem 1.8rem;
+  font-family: 'Special Elite', monospace;
+  opacity: 0;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7), inset 0 0 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+  transition: opacity 0.8s ease, transform 0.6s ease;
+}
+.old-paper::before {
+  content: ''; position: absolute; inset: 0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px; opacity: 0.08; pointer-events: none; mix-blend-mode: overlay;
+}
+.old-paper::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(180,150,90,0.03) 0%, transparent 15%, transparent 85%, rgba(0,0,0,0.15) 100%);
+  pointer-events: none;
+}
+.paper-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 0.8rem; padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(180,150,90,0.06);
+}
+.paper-class { font-size: 0.5rem; letter-spacing: 0.18em; color: #8b3a3a; text-transform: uppercase; line-height: 1.4; }
+.paper-id { font-size: 0.42rem; color: rgba(180,150,90,0.25); letter-spacing: 0.06em; }
+.paper-body { position: relative; z-index: 1; }
+.paper-line { font-size: 0.6rem; line-height: 2; color: rgba(180,150,90,0.45); letter-spacing: 0.02em; }
+.paper-line .blacked { background: rgba(20,18,14,0.9); color: transparent; padding: 0.05em 0.8em; display: inline-block; margin: 0 0.1em; }
+.paper-line .gold { color: rgba(212,168,83,0.65); }
+.paper-stamp {
+  position: absolute; top: 50%; right: 1rem;
+  transform: translateY(-50%) rotate(-12deg);
+  font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgba(139,58,58,0.1); border: 2px solid rgba(139,58,58,0.07);
+  padding: 0.4rem 1rem; border-radius: 2px; white-space: nowrap;
+  font-family: 'Special Elite', monospace; opacity: 0;
+  transition: opacity 0.6s ease 0.5s;
+}
+.old-paper.visible .paper-stamp { opacity: 1; }
+.paper-footer {
+  font-size: 0.35rem; color: rgba(180,150,90,0.12); letter-spacing: 0.1em;
+  text-transform: uppercase; margin-top: 0.6rem; padding-top: 0.4rem;
+  border-top: 1px solid rgba(180,150,90,0.04);
+}
+
+/* Update these classes in your <style> tag */
+
+/* --- FIXED POSITIONS (Zoom Safe) --- */
+
+/* 1. THE CENTER PIECE (For the "Access Granted" text) */
+.paper-e {
+    top: 50%;
+    left: 50%;
+    /* translate(-50%, -50%) perfectly centers it, rotate adds the style */
+    transform: translate(-50%, -50%) rotate(2deg);
+    z-index: 2; /* Slight boost to ensure text sits on top */
+}
+
+/* 2. THE SCATTERED FILES (All pinned to TOP to prevent zoom drift) */
+
+/* Top Left Corner */
+.paper-a {
+    top: 8%;
+    left: 5%;
+    transform: rotate(-15deg);
+}
+
+/* Top Right Area */
+.paper-b {
+    top: 12%;
+    right: 8%;
+    transform: rotate(8deg);
+}
+
+/* Middle Left (Safe zone) */
+.paper-c {
+    top: 40%;
+    left: 8%;
+    transform: rotate(12deg);
+}
+
+/* Middle Right (Safe zone) */
+.paper-d {
+    top: 35%;
+    right: 5%;
+    transform: rotate(-5deg);
+}
+
+/* Lower Left (But high enough to miss loading bar) */
+.paper-f {
+    top: 65%; 
+    left: 15%;
+    transform: rotate(-8deg);
+}
+
+/* Lower Right (But high enough to miss loading bar) */
+.paper-g {
+    top: 60%;
+    right: 12%;
+    transform: rotate(10deg);
+}
+
+/* Top Center-ish (Fills the empty gap) */
+.paper-h {
+    top: 15%;
+    left: 40%;
+    transform: rotate(18deg);
+}
+
+/* ACCESS GRANTED overlay on center paper */
+.access-stamp-overlay {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%) rotate(-15deg) scale(2.5);
+  opacity: 0; pointer-events: none; z-index: 10;
+  transition: opacity 0.15s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.access-stamp-overlay.slam {
+  opacity: 0.85; transform: translate(-50%, -50%) rotate(-15deg) scale(1);
+}
+.access-stamp-overlay svg { width: 180px; height: 110px; }
+
+/* Loading bar inside cutscene */
+.intro-loading { 
+  position: absolute; bottom: 6vh; left: 50%; transform: translateX(-50%);
+  z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 0.8rem;
+  opacity: 0; transition: opacity 0.5s;
+}
+.intro-loading.visible { opacity: 1; }
+.intro-loading-top { display: flex; align-items: baseline; gap: 1.2rem; }
+.intro-loading-text {
+  font-family: 'Special Elite', monospace; font-size: 0.55rem;
+  letter-spacing: 0.15em; text-transform: uppercase; color: rgba(180,150,90,0.35);
+}
+.intro-loading-text .blink { animation: blink 0.8s step-end infinite; }
+.intro-pct {
+  font-family: 'Special Elite', monospace; font-size: 1.4rem; font-weight: 400;
+  color: rgba(212,168,83,0.6); letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(212,168,83,0.2);
+}
+.intro-bar-track { width: 280px; height: 2px; background: rgba(212,168,83,0.06); border-radius: 1px; overflow: hidden; position: relative; }
+.intro-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, transparent, var(--gold-dim), var(--gold-primary)); transition: width 0.2s ease; box-shadow: 0 0 8px rgba(212,168,83,0.3); }
+.intro-bar-track::after { content: ''; position: absolute; top: -1px; bottom: -1px; right: 0; width: 6px; background: var(--gold-primary); opacity: 0; border-radius: 1px; box-shadow: 0 0 12px var(--gold-primary); transition: opacity 0.3s; }
+.intro-bar-fill[style*="100%"] ~ .intro-bar-track::after { opacity: 1; }
+.intro-terminal {
+  font-family: 'Special Elite', monospace; font-size: 0.48rem;
+  letter-spacing: 0.06em; color: rgba(180,150,90,0.25);
+  text-align: center; line-height: 1.6; min-height: 2.2em; margin-bottom: 0.3rem;
+}
+.intro-terminal .cmd { color: rgba(212,168,83,0.45); }
+.intro-ring {
+  position: absolute; bottom: 20vh; left: 50%; transform: translateX(-50%);
+  width: 36px; height: 36px; z-index: 20; opacity: 0; transition: opacity 0.5s;
+}
+.intro-ring.visible { opacity: 1; }
+.intro-ring::before, .intro-ring::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 1px solid rgba(212,168,83,0.12);
+}
+.intro-ring::before { animation: introSpin 3s linear infinite; border-top-color: rgba(212,168,83,0.45); }
+.intro-ring::after { inset: 5px; animation: introSpin 2s linear infinite reverse; border-right-color: rgba(212,168,83,0.35); }
+@keyframes introSpin { to { transform: rotate(360deg); } }
+.intro-status {
+  font-family: 'Special Elite', monospace; font-size: 0.4rem;
+  letter-spacing: 0.2em; text-transform: uppercase; color: rgba(180,150,90,0.18);
+  height: 0.6rem; overflow: hidden;
+}
+.intro-status span { display: block; animation: statusCycle 4s steps(1) infinite; }
+@keyframes statusCycle { 0% { transform: translateY(0); } 25% { transform: translateY(-0.6rem); } 50% { transform: translateY(-1.2rem); } 75% { transform: translateY(-1.8rem); } }
+.intro-sparks { position: absolute; bottom: 3vh; left: 0; right: 0; height: 60px; pointer-events: none; z-index: 19; }
+
+/* Floating background objects */
+.float-obj {
+  position: absolute; z-index: 1; opacity: 0; pointer-events: none;
+  transition: opacity 2s ease;
+}
+.float-obj.vis { opacity: 0.06; }
+.float-obj svg { width: 100%; height: 100%; }
+
+.cutscene-vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 65% 65% at 50% 50%, transparent 25%, rgba(6,5,10,0.7) 100%);
+  z-index: 3;
+}
+.cutscene-scanline {
+  position: absolute; inset: 0; pointer-events: none; z-index: 4;
+  background: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, rgba(0,0,0,0.02) 2px, rgba(0,0,0,0.02) 4px);
+}
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes fadeIn { to { opacity: 1; } }
+
+.grain { position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0.03; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E"); background-size: 128px; }
+
+/* ═══ NAV ═══ */
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 0 3rem; height: 72px; display: flex; align-items: center; justify-content: space-between; background: rgba(10,11,15,0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-subtle); transition: background 0.3s; }
+.nav.scrolled { background: rgba(10,11,15,0.92); }
+.nav-logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; cursor: pointer; }
+.nav-logo svg { width: 36px; height: 36px; }
+.nav-logo-text { font-family: var(--font-display); font-size: 1.15rem; font-weight: 500; letter-spacing: 0.2em; color: var(--gold-primary); text-transform: uppercase; }
+.nav-links { display: flex; align-items: center; gap: 0.3rem; }
+.nav-link { font-size: 0.78rem; font-weight: 500; letter-spacing: 0.06em; color: var(--text-secondary); text-decoration: none; padding: 0.5rem 1rem; border-radius: 6px; transition: color 0.25s, background 0.25s; cursor: pointer; }
+.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-link.active { color: var(--gold-primary); }
+.nav-actions { display: flex; align-items: center; gap: 0.75rem; }
+.btn-ghost { font-family: var(--font-body); font-size: 0.78rem; font-weight: 500; color: var(--text-secondary); background: none; border: 1px solid var(--border-medium); padding: 0.5rem 1.2rem; border-radius: 6px; cursor: pointer; transition: all 0.25s; }
+.btn-ghost:hover { color: var(--text-primary); border-color: var(--gold-dim); }
+.btn-gold { font-family: var(--font-body); font-size: 0.78rem; font-weight: 600; color: var(--bg-deep); background: var(--gold-primary); border: none; padding: 0.55rem 1.4rem; border-radius: 6px; cursor: pointer; transition: all 0.25s; box-shadow: 0 2px 12px var(--gold-glow); position: relative; overflow: hidden; }
+.btn-gold::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.25) 50%, transparent 60%); transform: translateX(-100%); transition: transform 0.6s; }
+.btn-gold:hover::after { transform: translateX(100%); }
+.btn-gold:hover { background: var(--gold-light); box-shadow: 0 4px 24px var(--gold-glow); }
+.nav-toggle { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 4px; }
+.nav-toggle span { width: 22px; height: 1.5px; background: var(--text-secondary); }
+
+/* ═══ HERO ═══ */
+.hero { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 6rem 2rem 4rem; position: relative; overflow: hidden; }
+#heroBg { position: absolute; inset: 0; z-index: 0; }
+.hero-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 50%, transparent 0%, var(--bg-deep) 100%); z-index: 1; }
+.hero-layout { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; max-width: 1200px; width: 100%; }
+.hero-content { max-width: 540px; }
+.hero-badge { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.65rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold-primary); background: rgba(212,168,83,0.08); border: 1px solid rgba(212,168,83,0.15); padding: 0.35rem 0.9rem; border-radius: 100px; margin-bottom: 2rem; opacity: 0; transform: translateY(20px); animation: fadeUp 0.8s var(--ease-out-expo) 0.3s forwards; }
+.hero-title { font-family: var(--font-display); font-size: clamp(2.6rem, 5vw, 4.2rem); font-weight: 300; line-height: 1.08; color: var(--text-primary); margin-bottom: 1.3rem; opacity: 0; transform: translateY(30px); animation: fadeUp 1s var(--ease-out-expo) 0.5s forwards; }
+.hero-title em { font-style: italic; color: var(--gold-primary); font-weight: 400; }
+.hero-subtitle { font-size: 1rem; font-weight: 400; line-height: 1.7; color: var(--text-secondary); margin-bottom: 2.2rem; opacity: 0; transform: translateY(30px); animation: fadeUp 1s var(--ease-out-expo) 0.7s forwards; }
+.hero-cta-group { display: flex; align-items: center; gap: 1rem; opacity: 0; transform: translateY(30px); animation: fadeUp 1s var(--ease-out-expo) 0.9s forwards; }
+.btn-hero-primary { font-family: var(--font-body); font-size: 0.92rem; font-weight: 600; color: var(--bg-deep); background: var(--gold-primary); border: none; padding: 0.9rem 2rem; border-radius: 8px; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; gap: 0.6rem; box-shadow: 0 4px 20px var(--gold-glow); position: relative; overflow: hidden; }
+.btn-hero-primary::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.25) 50%, transparent 60%); transform: translateX(-100%); transition: transform 0.6s; }
+.btn-hero-primary:hover::after { transform: translateX(100%); }
+.btn-hero-primary:hover { background: var(--gold-light); box-shadow: 0 8px 35px var(--gold-glow); transform: translateY(-2px); }
+.btn-hero-primary svg { width: 16px; height: 16px; }
+.btn-hero-secondary { font-family: var(--font-body); font-size: 0.88rem; font-weight: 500; color: var(--text-secondary); background: none; border: 1px solid var(--border-medium); padding: 0.85rem 1.8rem; border-radius: 8px; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; gap: 0.6rem; }
+.btn-hero-secondary:hover { color: var(--text-primary); border-color: var(--gold-dim); background: rgba(255,215,120,0.04); }
+.btn-hero-secondary svg { width: 16px; height: 16px; }
+
+.hero-visual { display: flex; align-items: center; justify-content: center; position: relative; height: 480px; opacity: 0; animation: fadeUp 1.2s var(--ease-out-expo) 0.6s forwards; }
+#hourglassCanvas { width: 380px; height: 480px; border-radius: 8px; }
+
+.hero-glyph { position: absolute; font-family: var(--font-display); color: rgba(212,168,83,0.1); font-size: 1.1rem; pointer-events: none; animation: glyphDrift 8s ease-in-out infinite; }
+.hero-glyph:nth-child(1) { top: 8%; left: -2%; animation-delay: 0s; }
+.hero-glyph:nth-child(2) { top: 28%; right: -8%; animation-delay: 2s; }
+.hero-glyph:nth-child(3) { bottom: 22%; left: -8%; animation-delay: 4s; }
+.hero-glyph:nth-child(4) { bottom: 8%; right: 2%; animation-delay: 1s; }
+.hero-glyph:nth-child(5) { top: 52%; left: -14%; animation-delay: 3s; }
+@keyframes glyphDrift { 0%, 100% { opacity: 0.06; transform: translateY(0) rotate(0deg); } 50% { opacity: 0.15; transform: translateY(-10px) rotate(5deg); } }
+
+.hero-scroll-hint { position: absolute; bottom: 2.5rem; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; opacity: 0; animation: fadeUp 1s var(--ease-out-expo) 1.6s forwards; }
+.hero-scroll-hint span { font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); }
+.scroll-line { width: 1px; height: 40px; background: linear-gradient(to bottom, var(--gold-dim), transparent); animation: scrollPulse 2s ease-in-out infinite; }
+@keyframes scrollPulse { 0%, 100% { opacity: 0.3; transform: scaleY(0.6); } 50% { opacity: 1; transform: scaleY(1); } }
+@keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+/* ═══ STATS ═══ */
+.stats-ribbon { display: flex; justify-content: center; gap: 4rem; padding: 3rem 2rem; border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); background: rgba(21,23,32,0.5); }
+.stat-item { text-align: center; }
+.stat-number { font-family: var(--font-display); font-size: 2.4rem; font-weight: 600; color: var(--gold-primary); line-height: 1; }
+.stat-label { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-top: 0.4rem; }
+
+/* ═══ SECTIONS ═══ */
+.section { padding: 7rem 2rem; max-width: 1200px; margin: 0 auto; }
+.section-eyebrow { font-size: 0.92rem; font-weight: 600; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold-dim); margin-bottom: 1rem; }
+.section-title { font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3rem); font-weight: 400; line-height: 1.15; color: var(--text-primary); margin-bottom: 1rem; }
+.section-title em { font-style: italic; color: var(--gold-primary); }
+.section-desc { font-size: 0.95rem; line-height: 1.7; color: var(--text-secondary); max-width: 560px; }
+
+/* ═══ MISSION ═══ */
+.mission-section { padding: 7rem 2rem; }
+.mission-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+.mission-inner .section-desc { margin: 0 auto 3rem; max-width: 640px; }
+.mission-pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border-subtle); border-radius: 12px; overflow: hidden; }
+.mission-pillar { background: var(--bg-card); padding: 2.2rem 1.8rem; text-align: left; position: relative; transition: background 0.4s; cursor: default; }
+.mission-pillar:hover { background: var(--bg-card-hover); }
+.mission-pillar::after { content: ''; position: absolute; bottom: 0; left: 1.8rem; right: 1.8rem; height: 1px; background: linear-gradient(90deg, transparent, var(--gold-primary), transparent); opacity: 0; transition: opacity 0.4s; }
+.mission-pillar:hover::after { opacity: 0.5; }
+.pillar-num { font-family: var(--font-display); font-size: 3rem; font-weight: 300; color: var(--gold-primary); opacity: 0.2; line-height: 1; margin-bottom: 1rem; }
+.mission-pillar h3 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; }
+.mission-pillar p { font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary); }
+
+/* ═══ HOW IT WORKS ═══ */
+.how-steps { display: flex; flex-direction: column; margin-top: 3rem; position: relative; }
+.how-steps::before { content: ''; position: absolute; left: 32px; top: 0; bottom: 0; width: 1px; background: linear-gradient(to bottom, transparent, var(--border-medium) 10%, var(--border-medium) 90%, transparent); }
+.how-step { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 2rem; align-items: center; padding: 2rem 0; position: relative; }
+.how-step-marker { width: 64px; height: 64px; border-radius: 50%; background: var(--bg-card); border: 1px solid var(--border-medium); display: flex; align-items: center; justify-content: center; position: relative; z-index: 2; transition: all 0.4s; }
+.how-step:hover .how-step-marker { border-color: var(--gold-primary); box-shadow: 0 0 0 6px rgba(212,168,83,0.08), 0 4px 20px var(--gold-glow); transform: scale(1.08); }
+.how-step-marker svg { width: 24px; height: 24px; color: var(--gold-primary); }
+.how-step-text h3 { font-family: var(--font-display); font-size: 1.35rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.4rem; }
+.how-step-text p { font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary); }
+.how-step-visual { height: 140px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden; position: relative; transition: border-color 0.4s, transform 0.4s var(--ease-out-expo); }
+.how-step:hover .how-step-visual { border-color: var(--border-medium); transform: translateY(-3px); }
+
+.cause-chain-demo { display: flex; align-items: center; justify-content: center; height: 100%; gap: 0.5rem; padding: 1rem; }
+.cc-node { padding: 0.35rem 0.65rem; font-size: 0.65rem; font-weight: 600; border-radius: 6px; white-space: nowrap; transition: transform 0.3s var(--ease-spring), box-shadow 0.3s; cursor: default; }
+.cc-node:hover { transform: scale(1.1); }
+.cc-node.cause { background: rgba(74,158,142,0.15); color: var(--accent-teal); border: 1px solid rgba(74,158,142,0.2); }
+.cc-node.event { background: rgba(212,168,83,0.15); color: var(--gold-primary); border: 1px solid rgba(212,168,83,0.2); }
+.cc-node:hover.cause { box-shadow: 0 0 12px rgba(74,158,142,0.2); }
+.cc-node:hover.event { box-shadow: 0 0 12px var(--gold-glow); }
+.cc-arrow { color: var(--text-muted); font-size: 0.7rem; }
+
+.perspective-demo { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 0.6rem; padding: 0.8rem; }
+.persp-toggles { display: flex; gap: 0.4rem; }
+.persp-btn { padding: 0.25rem 0.6rem; font-size: 0.6rem; font-weight: 600; border-radius: 4px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-muted); cursor: pointer; transition: all 0.3s; font-family: var(--font-body); }
+.persp-btn.active { background: rgba(212,168,83,0.12); color: var(--gold-primary); border-color: rgba(212,168,83,0.25); }
+.persp-btn:hover { border-color: var(--border-medium); color: var(--text-secondary); }
+.persp-bar-group { display: flex; gap: 0.4rem; width: 80%; }
+.persp-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--bg-surface); position: relative; overflow: hidden; }
+.persp-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; transition: width 0.5s var(--ease-out-expo); }
+
+.arena-demo { display: flex; align-items: center; justify-content: center; height: 100%; gap: 1.5rem; padding: 1rem; }
+.arena-player { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.arena-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; }
+.arena-avatar.you { background: rgba(74,158,142,0.2); color: var(--accent-teal); border: 1px solid rgba(74,158,142,0.3); }
+.arena-avatar.ai { background: rgba(196,92,92,0.2); color: var(--accent-rose); border: 1px solid rgba(196,92,92,0.3); }
+.arena-name { font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.arena-score-bar { width: 80px; height: 6px; border-radius: 3px; background: var(--bg-surface); overflow: hidden; }
+.arena-score-fill { height: 100%; border-radius: 3px; transition: width 1.5s var(--ease-out-expo); }
+.arena-score-fill.you { background: var(--accent-teal); }
+.arena-score-fill.ai { background: var(--accent-rose); }
+.arena-vs { font-family: var(--font-display); font-size: 1rem; color: var(--gold-primary); opacity: 0.5; }
+
+/* ═══ ERAS ═══ */
+.eras-section { padding: 7rem 2rem; background: linear-gradient(180deg, var(--bg-deep) 0%, rgba(15,17,23,0.8) 50%, var(--bg-deep) 100%); }
+.eras-inner { max-width: 1200px; margin: 0 auto; }
+.eras-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 3rem; }
+.era-card { aspect-ratio: 1; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 14px; padding: 1.5rem; cursor: pointer; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; transition: border-color 0.4s, transform 0.4s var(--ease-out-expo), box-shadow 0.4s; }
+.era-card:hover { border-color: var(--border-medium); transform: translateY(-5px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+.era-card.active { border-color: var(--gold-primary); box-shadow: 0 0 0 1px var(--gold-primary), 0 12px 40px rgba(212,168,83,0.1); }
+
+.era-shape-container { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+
+.era-card:hover .era-icon { opacity: 0.45 !important; transform: scale(1.15); }
+.era-card.active .era-icon { opacity: 0.65 !important; transform: scale(1.25); }
+
+.era-card[data-era="roman"] .era-icon { animation: iconFloat 6s ease-in-out infinite; }
+.era-card[data-era="medieval"] .era-icon { animation: iconFloat 7s ease-in-out infinite 1s; }
+.era-card[data-era="ww2"] .era-icon { animation: iconFloat 5s ease-in-out infinite 0.5s; }
+.era-card[data-era="coldwar"] .era-icon { animation: iconFloat 8s ease-in-out infinite 1.5s; }
+@keyframes iconFloat { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-6px) scale(1.05); } }
+@keyframes rotateCube { to { transform: rotateX(360deg) rotateY(360deg); } }
+
+.era-date { font-family: var(--font-typewriter); font-size: 0.58rem; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 0.3rem; position: relative; z-index: 2; }
+.era-card h3 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 500; color: var(--text-primary); position: relative; z-index: 2; transition: color 0.3s; }
+.era-card:hover h3 { color: var(--gold-light); }
+.era-tag { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.3rem; position: relative; z-index: 2; opacity: 0; transform: translateY(5px); transition: opacity 0.4s, transform 0.4s; }
+.era-card:hover .era-tag, .era-card.active .era-tag { opacity: 1; transform: translateY(0); }
+
+.era-detail { margin-top: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: 14px; padding: 2rem; display: none; animation: panelSlideIn 0.5s var(--ease-out-expo); }
+.era-detail.visible { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+@keyframes panelSlideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.era-detail h4 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 400; color: var(--text-primary); margin-bottom: 0.5rem; }
+.era-detail p { font-size: 0.85rem; line-height: 1.7; color: var(--text-secondary); }
+.era-detail-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem; }
+.era-detail-tag { padding: 0.25rem 0.6rem; font-size: 0.65rem; font-weight: 600; border-radius: 4px; letter-spacing: 0.04em; }
+.era-detail-tag.econ { background: rgba(74,158,142,0.1); color: var(--accent-teal); }
+.era-detail-tag.mil { background: rgba(196,92,92,0.1); color: var(--accent-rose); }
+.era-detail-tag.ideo { background: rgba(91,127,184,0.1); color: var(--accent-blue); }
+.era-detail-tag.diplo { background: rgba(212,168,83,0.1); color: var(--gold-primary); }
+.era-detail-visual { display: flex; align-items: center; justify-content: center; position: relative; }
+.era-detail-canvas { border-radius: 12px; background: rgba(0,0,0,0.2); }
+.era-viz-canvas { border-radius: 12px; }
+.era-viz-overlay {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center; pointer-events: none;
+}
+.era-viz-year {
+  font-family: var(--font-display); font-size: 2rem; font-weight: 300;
+  letter-spacing: 0.1em; opacity: 0.15;
+}
+.era-viz-label {
+  font-family: var(--font-typewriter); font-size: 0.5rem; letter-spacing: 0.2em;
+  text-transform: uppercase; opacity: 0.25; margin-top: 0.2rem;
+}
+
+/* ═══ FEATURES ═══ */
+.features-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.25rem; margin-top: 3.5rem; }
+.feature-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 14px; padding: 2rem; position: relative; overflow: hidden; transition: border-color 0.4s, transform 0.4s var(--ease-out-expo); }
+.feature-card:hover { border-color: var(--border-medium); transform: translateY(-3px); }
+.feature-card::before { content: ''; position: absolute; inset: 0; border-radius: 14px; background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(212,168,83,0.06) 0%, transparent 60%); opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+.feature-card:hover::before { opacity: 1; }
+.feature-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(212,168,83,0.2), transparent); transform: scaleX(0); transition: transform 0.6s var(--ease-out-expo); }
+.feature-card:hover::after { transform: scaleX(1); }
+.feature-card.span-7 { grid-column: span 7; }
+.feature-card.span-5 { grid-column: span 5; }
+.feature-card-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.2rem; }
+.feature-card-icon.teal { background: rgba(74,158,142,0.12); }
+.feature-card-icon.teal svg { color: var(--accent-teal); }
+.feature-card-icon.gold { background: rgba(212,168,83,0.12); }
+.feature-card-icon.gold svg { color: var(--gold-primary); }
+.feature-card-icon.rose { background: rgba(196,92,92,0.12); }
+.feature-card-icon.rose svg { color: var(--accent-rose); }
+.feature-card-icon.blue { background: rgba(91,127,184,0.12); }
+.feature-card-icon.blue svg { color: var(--accent-blue); }
+.feature-card-icon svg { width: 20px; height: 20px; }
+.feature-card h3 { font-family: var(--font-display); font-size: 1.25rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; }
+.feature-card p { font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary); }
+.feature-visual { margin-top: 1.5rem; height: 120px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); overflow: visible; position: relative; }
+
+.tl-interactive { display: flex; align-items: center; height: 100%; padding: 0 1.5rem; }
+.tl-node-i { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; position: relative; z-index: 2; cursor: pointer; transition: transform 0.3s var(--ease-spring), box-shadow 0.3s; }
+.tl-node-i:hover { transform: scale(1.6); }
+.tl-node-i.n1 { background: var(--accent-teal); }
+.tl-node-i.n1:hover { box-shadow: 0 0 14px rgba(74,158,142,0.5); }
+.tl-node-i.n2 { background: var(--gold-primary); }
+.tl-node-i.n2:hover { box-shadow: 0 0 14px var(--gold-glow); }
+.tl-node-i.n3 { background: var(--accent-rose); }
+.tl-node-i.n3:hover { box-shadow: 0 0 14px rgba(196,92,92,0.5); }
+.tl-node-i.n4 { background: var(--accent-blue); }
+.tl-node-i.n4:hover { box-shadow: 0 0 14px rgba(91,127,184,0.5); }
+.tl-tooltip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); background: var(--bg-surface); border: 1px solid var(--border-medium); padding: 0.35rem 0.7rem; border-radius: 4px; white-space: nowrap; font-size: 0.6rem; color: var(--text-primary); opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.tl-node-i:first-child .tl-tooltip { left: 0; transform: none; }
+.tl-node-i:last-child .tl-tooltip { left: auto; right: 0; transform: none; }
+.tl-node-i:first-child:hover .tl-tooltip { transform: translateY(-3px); }
+.tl-node-i:last-child:hover .tl-tooltip { transform: translateY(-3px); }
+.tl-node-i:hover .tl-tooltip { opacity: 1; transform: translateX(-50%) translateY(-3px); }
+.tl-line-i { flex: 1; height: 1px; background: var(--border-medium); }
+
+/* ═══ CTA ═══ */
+.cta-section { padding: 6rem 2rem; }
+.cta-card { max-width: 900px; margin: 0 auto; background: linear-gradient(135deg, rgba(212,168,83,0.06), rgba(212,168,83,0.02)); border: 1px solid rgba(212,168,83,0.15); border-radius: 20px; padding: 4rem; text-align: center; position: relative; overflow: hidden; }
+.cta-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(212,168,83,0.08) 0%, transparent 60%); }
+.cta-card .section-title { margin-bottom: 0.8rem; position: relative; z-index: 1; }
+.cta-card .section-desc { margin: 0 auto 2rem; max-width: 480px; position: relative; z-index: 1; text-align: center; }
+.cta-form { display: flex; align-items: center; justify-content: center; gap: 0.75rem; max-width: 480px; margin: 0 auto; position: relative; z-index: 1; }
+.cta-input { flex: 1; padding: 0.85rem 1rem; font-family: var(--font-body); font-size: 0.88rem; color: var(--text-primary); background: rgba(10,11,15,0.6); border: 1px solid var(--border-medium); border-radius: 8px; outline: none; transition: border-color 0.3s, box-shadow 0.3s; backdrop-filter: blur(10px); }
+.cta-input:focus { border-color: var(--gold-primary); box-shadow: 0 0 0 3px rgba(212,168,83,0.1); }
+.cta-input::placeholder { color: var(--text-muted); }
+.cta-submit { padding: 0.85rem 2rem; font-family: var(--font-body); font-size: 0.88rem; font-weight: 600; color: var(--bg-deep); background: var(--gold-primary); border: none; border-radius: 8px; cursor: pointer; transition: all 0.3s; white-space: nowrap; box-shadow: 0 4px 20px var(--gold-glow); }
+.cta-submit:hover { background: var(--gold-light); box-shadow: 0 6px 30px var(--gold-glow); }
+.cta-note { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.8rem; position: relative; z-index: 1; }
+
+/* ═══ MODAL ═══ */
+.modal-overlay { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.4s, visibility 0.4s; }
+.modal-overlay.active { opacity: 1; visibility: visible; }
+.modal { background: var(--bg-primary); border: 1px solid var(--border-medium); border-radius: 16px; padding: 2.5rem; width: 100%; max-width: 420px; position: relative; transform: translateY(20px) scale(0.97); transition: transform 0.5s var(--ease-out-expo); }
+.modal-overlay.active .modal { transform: translateY(0) scale(1); }
+.modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; transition: color 0.2s; }
+.modal-close:hover { color: var(--text-primary); }
+.modal-close svg { width: 20px; height: 20px; }
+.modal h2 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 400; color: var(--text-primary); margin-bottom: 0.4rem; }
+.modal .modal-sub { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.8rem; }
+.form-group { margin-bottom: 1.1rem; }
+.form-label { display: block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem; }
+.form-input { width: 100%; padding: 0.7rem 0.9rem; font-family: var(--font-body); font-size: 0.88rem; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; outline: none; transition: border-color 0.3s, box-shadow 0.3s; }
+.form-input:focus { border-color: var(--gold-primary); box-shadow: 0 0 0 3px rgba(212,168,83,0.1); }
+.form-input::placeholder { color: var(--text-muted); }
+.btn-submit { width: 100%; padding: 0.8rem; font-family: var(--font-body); font-size: 0.88rem; font-weight: 600; color: var(--bg-deep); background: var(--gold-primary); border: none; border-radius: 8px; cursor: pointer; transition: all 0.3s; margin-top: 0.5rem; }
+.btn-submit:hover { background: var(--gold-light); box-shadow: 0 4px 20px var(--gold-glow); }
+.modal-footer { text-align: center; margin-top: 1.2rem; font-size: 0.78rem; color: var(--text-muted); }
+.modal-footer a { color: var(--gold-primary); text-decoration: none; cursor: pointer; }
+
+/* ═══ FOOTER ═══ */
+footer { padding: 3rem 2rem; border-top: 1px solid var(--border-subtle); }
+.footer-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+.footer-copy { font-size: 0.72rem; color: var(--text-muted); }
+.footer-links { display: flex; gap: 1.5rem; }
+.footer-links a { font-size: 0.72rem; color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+.footer-links a:hover { color: var(--text-secondary); }
+.footer-credit { font-size: 0.68rem; color: var(--text-muted); margin-top: 0.35rem; opacity: 0.85; }
+
+.reveal { opacity: 0; transform: translateY(40px); transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo); }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+
+@media (max-width: 1000px) {
+  .hero-layout { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .hero-content { max-width: 600px; }
+  .hero-cta-group { justify-content: center; }
+  .hero-visual { height: 350px; }
+  #hourglassCanvas { width: 280px; height: 360px; }
+  .eras-grid { grid-template-columns: repeat(2, 1fr); }
+  .how-step { grid-template-columns: 48px 1fr; }
+  .how-step-visual { display: none; }
+  .how-step-marker { width: 48px; height: 48px; }
+}
+@media (max-width: 900px) {
+  .features-grid { grid-template-columns: 1fr; }
+  .feature-card.span-7, .feature-card.span-5 { grid-column: span 1; }
+  .stats-ribbon { gap: 2rem; flex-wrap: wrap; }
+  .mission-pillars { grid-template-columns: 1fr; }
+  .era-detail.visible { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .nav { padding: 0 1.5rem; }
+  .nav-links { display: none; }
+  .nav-toggle { display: flex; }
+  .nav-links.open { display: flex; flex-direction: column; position: absolute; top: 72px; left: 0; right: 0; background: rgba(10,11,15,0.96); backdrop-filter: blur(20px); padding: 1rem; border-bottom: 1px solid var(--border-subtle); }
+  .section { padding: 4rem 1.5rem; }
+  .hero { padding: 5rem 1.5rem 3rem; }
+  .hero-cta-group { flex-direction: column; }
+  .eras-grid { grid-template-columns: 1fr 1fr; }
+  .cta-form { flex-direction: column; }
+  .cta-submit { width: 100%; }
+  .footer-inner { flex-direction: column; gap: 1rem; }
+  .cta-card { padding: 2.5rem 1.5rem; }
+}
+
+/* Spline hero embed */
+.hero-visual {
+  overflow: visible;
+}
+
+.hero-visual spline-viewer {
+  transform: scale(1.15);
+  transform-origin: center;
+}
+
+spline-viewer {
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  --logo-display: none; 
+}
+
+spline-viewer canvas {
+  background: transparent !important;
+}
+
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- INTRO CUTSCENE -->
+<div id="introCutscene">
+  <canvas id="introCanvas"></canvas>
+
+  <!-- Floating background objects -->
+  <div class="float-obj" style="width:60px;height:60px;top:15%;left:12%;transform:rotate(25deg)"><svg viewBox="0 0 60 60" fill="none"><path d="M30 5L35 20H50L38 30L42 45L30 35L18 45L22 30L10 20H25Z" stroke="#d4a853" stroke-width="0.8"/></svg></div>
+  <div class="float-obj" style="width:50px;height:80px;top:20%;right:15%;transform:rotate(-10deg)"><svg viewBox="0 0 50 80" fill="none"><rect x="5" y="5" width="40" height="55" rx="2" stroke="#d4a853" stroke-width="0.8"/><line x1="12" y1="15" x2="38" y2="15" stroke="#d4a853" stroke-width="0.5"/><line x1="12" y1="22" x2="38" y2="22" stroke="#d4a853" stroke-width="0.5"/><line x1="12" y1="29" x2="30" y2="29" stroke="#d4a853" stroke-width="0.5"/><line x1="12" y1="36" x2="35" y2="36" stroke="#d4a853" stroke-width="0.5"/><line x1="12" y1="43" x2="28" y2="43" stroke="#d4a853" stroke-width="0.5"/><path d="M5 60L25 70L45 60" stroke="#d4a853" stroke-width="0.6"/></svg></div>
+  <div class="float-obj" style="width:70px;height:40px;bottom:25%;left:8%;transform:rotate(5deg)"><svg viewBox="0 0 70 40" fill="none"><path d="M5 35L15 5H55L65 35Z" stroke="#d4a853" stroke-width="0.8"/><line x1="20" y1="10" x2="35" y2="30" stroke="#d4a853" stroke-width="0.5"/><circle cx="35" cy="20" r="4" stroke="#d4a853" stroke-width="0.5"/></svg></div>
+  <div class="float-obj" style="width:45px;height:70px;bottom:18%;right:10%;transform:rotate(-20deg)"><svg viewBox="0 0 45 70" fill="none"><path d="M22 5L28 20V50L35 65H10L17 50V20Z" stroke="#d4a853" stroke-width="0.8"/><line x1="17" y1="35" x2="28" y2="35" stroke="#d4a853" stroke-width="0.5"/><circle cx="22" cy="13" r="3" stroke="#d4a853" stroke-width="0.5"/></svg></div>
+  <div class="float-obj" style="width:55px;height:55px;top:60%;left:25%;transform:rotate(15deg)"><svg viewBox="0 0 55 55" fill="none"><circle cx="27" cy="27" r="22" stroke="#d4a853" stroke-width="0.6"/><path d="M27 5V50M5 27H50" stroke="#d4a853" stroke-width="0.4"/><circle cx="27" cy="27" r="10" stroke="#d4a853" stroke-width="0.5"/></svg></div>
+  <div class="float-obj" style="width:40px;height:60px;top:10%;left:55%;transform:rotate(-8deg)"><svg viewBox="0 0 40 60" fill="none"><rect x="8" y="3" width="24" height="54" rx="1" stroke="#d4a853" stroke-width="0.7"/><line x1="12" y1="10" x2="28" y2="10" stroke="#d4a853" stroke-width="0.4"/><line x1="12" y1="16" x2="28" y2="16" stroke="#d4a853" stroke-width="0.4"/><line x1="12" y1="22" x2="22" y2="22" stroke="#d4a853" stroke-width="0.4"/></svg></div>
+  <div class="float-obj" style="width:50px;height:50px;bottom:30%;left:60%;transform:rotate(35deg)"><svg viewBox="0 0 50 50" fill="none"><path d="M25 3L5 18L12 42H38L45 18Z" stroke="#d4a853" stroke-width="0.7"/><circle cx="25" cy="22" r="6" stroke="#d4a853" stroke-width="0.5"/></svg></div>
+  <div class="float-obj" style="width:35px;height:55px;top:40%;right:8%;transform:rotate(12deg)"><svg viewBox="0 0 35 55" fill="none"><path d="M17 5L5 15V40L17 50L30 40V15Z" stroke="#d4a853" stroke-width="0.7"/><line x1="17" y1="5" x2="17" y2="50" stroke="#d4a853" stroke-width="0.4"/></svg></div>
+
+  <div class="old-paper paper-a" id="paperA">
+    <div class="paper-header"><div class="paper-class">⬤ Top Secret — Eyes Only</div><div class="paper-id">DOC #TD-1944-0087</div></div>
+    <div class="paper-body">
+      <div class="paper-line">FIELD REPORT: Operation <span class="gold">Overlord</span></div>
+      <div class="paper-line">Date: <span class="blacked">██████████</span> June 1944</div>
+      <div class="paper-line">Allied forces breached the <span class="gold">Atlantic Wall</span></div>
+      <div class="paper-line">Casualties: <span class="blacked">██████</span> est. KIA first 24hrs</div>
+      <div class="paper-line">Strategic outcome: <span class="gold">DECISIVE VICTORY</span></div>
+    </div>
+    <div class="paper-stamp">DECLASSIFIED</div>
+    <div class="paper-footer">Temporal Archives — Chrono Division</div>
+  </div>
+
+  <div class="old-paper paper-b" id="paperB">
+    <div class="paper-header"><div class="paper-class">⬤ Restricted — Level 3</div><div class="paper-id">DOC #TD-0476-ROME</div></div>
+    <div class="paper-body">
+      <div class="paper-line">SUBJECT: Collapse of <span class="gold">Western Rome</span></div>
+      <div class="paper-line">Economic <span class="blacked">██████████████</span> of provinces</div>
+      <div class="paper-line"><span class="blacked">████████████</span> migrations across Rhine</div>
+      <div class="paper-line">Military overextension in <span class="gold">Gaul</span></div>
+      <div class="paper-line">Causal confidence: <span class="gold">94.7%</span></div>
+    </div>
+    <div class="paper-stamp">ARCHIVED</div>
+    <div class="paper-footer">Temporal Education Protocol</div>
+  </div>
+
+  <div class="old-paper paper-c" id="paperC">
+    <div class="paper-header"><div class="paper-class">⬤ Classified — Level 4</div><div class="paper-id">INTEL #CW-1962-013</div></div>
+    <div class="paper-body">
+      <div class="paper-line">RE: Cuban <span class="gold">Missile Crisis</span> — Day 9</div>
+      <div class="paper-line">Naval blockade <span class="blacked">████████</span> in effect</div>
+      <div class="paper-line"><span class="gold">DEFCON 2</span> authorized by <span class="blacked">██████████</span></div>
+      <div class="paper-line">Nuclear strike probability: <span class="blacked">████</span>%</div>
+      <div class="paper-line">Recommend <span class="gold">diplomatic channel</span></div>
+    </div>
+    <div class="paper-stamp">TOP SECRET</div>
+    <div class="paper-footer">NSC Situation Room — Eyes Only</div>
+  </div>
+
+  <div class="old-paper paper-d" id="paperD">
+    <div class="paper-header"><div class="paper-class">⬤ Confidential</div><div class="paper-id">FIELD #MD-1347-008</div></div>
+    <div class="paper-body">
+      <div class="paper-line">PLAGUE REPORT: <span class="gold">Black Death</span></div>
+      <div class="paper-line">Mortality exceeds <span class="blacked">██</span>% in ports</div>
+      <div class="paper-line">Trade from <span class="gold">Crimea</span> confirmed vector</div>
+      <div class="paper-line">Social disruption: <span class="gold">CATASTROPHIC</span></div>
+    </div>
+    <div class="paper-stamp">SEALED</div>
+    <div class="paper-footer">Medieval Archive — Restricted</div>
+  </div>
+
+  <div class="old-paper paper-e" id="paperE">
+    <div class="paper-header"><div class="paper-class">⬤ Temporal Clearance Required</div><div class="paper-id">FILE #CL-2025-0042</div></div>
+    <div class="paper-body">
+      <div class="paper-line">SUBJECT: <span class="gold">Temporal Education Protocol</span></div>
+      <div class="paper-line">Codename: <span class="gold">CHRONOLOOP</span></div>
+      <div class="paper-line">Status: <span class="blacked">████████</span> — Active deployment</div>
+      <div class="paper-line">Objective: Reconstruct causal models</div>
+      <div class="paper-line">Authorization: <span class="gold">GRANTED</span></div>
+    </div>
+    <div class="paper-stamp">ACCESS GRANTED</div>
+    <div class="paper-footer">Chronoloop — Proiect "ISTORIE ŞI SOCIETATE ÎN DIMENSIUNE VIRTUALĂ" 2026</div>
+  </div>
+
+  <div class="old-paper paper-f" id="paperF">
+    <div class="paper-header"><div class="paper-class">⬤ Signals Intelligence</div><div class="paper-id">SIGINT #EN-1944-ULT</div></div>
+    <div class="paper-body">
+      <div class="paper-line">INTERCEPT: <span class="gold">Enigma</span> decrypt batch</div>
+      <div class="paper-line">Origin: <span class="blacked">████████</span> U-boat fleet</div>
+      <div class="paper-line">Bletchley confirms <span class="gold">Pattern 7-Alpha</span></div>
+    </div>
+    <div class="paper-stamp">ULTRA</div>
+    <div class="paper-footer">Station X — Bletchley Park</div>
+  </div>
+
+  <div class="old-paper paper-g" id="paperG">
+    <div class="paper-header"><div class="paper-class">⬤ Priority Alpha</div><div class="paper-id">ASTRO #SP-1957-001</div></div>
+    <div class="paper-body">
+      <div class="paper-line">SUBJECT: <span class="gold">Sputnik</span> telemetry</div>
+      <div class="paper-line">Orbital period: <span class="gold">96.2 min</span></div>
+      <div class="paper-line">Freq: <span class="blacked">████</span> MHz confirmed</div>
+    </div>
+    <div class="paper-stamp">CLASSIFIED</div>
+    <div class="paper-footer">NORAD — Space Command</div>
+  </div>
+
+  <div class="old-paper paper-h" id="paperH">
+    <div class="paper-header"><div class="paper-class">⬤ Archaeological Survey</div><div class="paper-id">ARCH #RO-0044-VIA</div></div>
+    <div class="paper-body">
+      <div class="paper-line">SITE: <span class="gold">Via Appia</span> excavation</div>
+      <div class="paper-line">Artifacts: <span class="blacked">██████</span> legion markers</div>
+      <div class="paper-line">Date est: <span class="gold">312 BC</span></div>
+    </div>
+    <div class="paper-stamp">VERIFIED</div>
+    <div class="paper-footer">Temporal Archaeology Div.</div>
+  </div>
+
+  <div class="access-stamp-overlay" id="accessStamp">
+    <svg viewBox="0 0 180 110" fill="none"><rect x="4" y="4" width="172" height="102" rx="5" stroke="#c45c5c" stroke-width="4" opacity="0.8"/><rect x="10" y="10" width="160" height="90" rx="3" stroke="#c45c5c" stroke-width="1.5" opacity="0.4"/><text x="90" y="52" text-anchor="middle" font-family="'Special Elite', monospace" font-size="28" fill="#c45c5c" opacity="0.9" letter-spacing="8">ACCESS</text><text x="90" y="78" text-anchor="middle" font-family="'Special Elite', monospace" font-size="20" fill="#c45c5c" opacity="0.7" letter-spacing="5">GRANTED</text><line x1="20" y1="92" x2="160" y2="92" stroke="#c45c5c" stroke-width="0.5" opacity="0.3"/><text x="90" y="100" text-anchor="middle" font-family="'Special Elite', monospace" font-size="7" fill="#c45c5c" opacity="0.4">AUTH: TEMPORAL DIVISION</text></svg>
+  </div>
+
+  <div class="intro-ring" id="introRing"></div>
+  <div class="intro-loading" id="introLoading">
+    <div class="intro-terminal" id="introTerminal"></div>
+    <div class="intro-loading-top">
+      <div class="intro-loading-text">Decrypting temporal archives<span class="blink">_</span></div>
+      <div class="intro-pct" id="introPct">0%</div>
+    </div>
+    <div class="intro-bar-track"><div class="intro-bar-fill" id="introBar"></div></div>
+    <div class="intro-status"><span>PARSING CAUSAL CHAINS ··· CROSS-REFERENCING TIMELINES ··· LOADING SCENARIOS ··· VERIFYING TEMPORAL INTEGRITY ···</span></div>
+  </div>
+  <canvas class="intro-sparks" id="introSparks"></canvas>
+
+  <div class="cutscene-vignette"></div>
+  <div class="cutscene-scanline"></div>
+</div>
+
+<!-- NAV -->
+<nav class="nav" id="mainNav">
+  <a class="nav-logo" href="chronoloop_spline.html">
+    <svg viewBox="0 0 36 36" fill="none"><path d="M18 2 L32 10 L32 26 L18 34 L4 26 L4 10 Z" stroke="#d4a853" stroke-width="0.8" fill="none" opacity="0.4"/><path d="M12 10 L24 10 L18 18 L24 26 L12 26 L18 18 Z" stroke="#d4a853" stroke-width="1.2" fill="none" opacity="0.8"/><path d="M18 14 L21 18 L18 22 L15 18 Z" fill="#d4a853" opacity="0.6"/><path d="M10 18 A 8 8 0 0 1 18 10" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/><path d="M26 18 A 8 8 0 0 1 18 26" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/></svg>
+    <span class="nav-logo-text">Chronoloop</span>
+  </a>
+  <div class="nav-links" id="navLinks">
+    <a class="nav-link active" id="navHome" href="chronoloop_spline.html">Home</a>
+    <a class="nav-link" id="navWorldMap" href="chronoloop_hub.html">World Map</a>
+    <a class="nav-link" id="navArena" href="chronoloop_arena.html">Arena</a>
+    <a class="nav-link" id="navLeaderboard" href="chronoloop_leaderboard.html">Leaderboard</a>
+  </div>
+  <div class="nav-actions" id="navActions">
+    <button class="btn-ghost" id="navLogin" onclick="openModal('login')">Log In</button>
+    <button class="btn-gold" id="navJoinBeta" onclick="openModal('register')">Join the Beta</button>
+    <button class="btn-ghost" id="langToggleBtnSpline" onclick="toggleLanguageSpline()" style="padding:0.35rem 0.5rem;display:flex;align-items:center;gap:0.3rem;min-width:auto;">
+      <svg id="langFlagIconSpline" viewBox="0 0 640 480" style="width:20px;height:14px;border-radius:2px;flex-shrink:0;"></svg>
+      <span id="langLabelSpline" style="font-size:0.6rem;letter-spacing:0.05em;">EN</span>
+    </button>
+  </div>
+  <button class="nav-toggle" id="navToggle"><span></span><span></span><span></span></button>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <canvas id="heroBg"></canvas>
+  <div class="hero-vignette"></div>
+  <div class="hero-layout">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="0.8"/><path d="M7 3 L8 7 L7 11 L6 7 Z" fill="currentColor" opacity="0.7"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg>
+        <span id="heroBadgeText">History and Society in the Virtual Dimension - Project</span>
+      </div>
+      <h1 class="hero-title" id="heroTitle">History isn't about dates.<br>It's about <em>why.</em></h1>
+      <p class="hero-subtitle" id="heroSubtitle">Build causal models, debate perspectives, and compete in timed rounds. CHRONOLOOP turns passive memorization into active strategic thinking.</p>
+      <div class="hero-cta-group">
+        <button class="btn-hero-primary" id="heroStartBtn" onclick="openModal('register')">Start Free <svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn-hero-secondary" id="heroHowBtn" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1"/><path d="M6.5 5.5 L11 8 L6.5 10.5 Z" fill="currentColor"/></svg> <span id="heroHowText">See How It Works</span></button>
+      </div>
+    </div>
+    <div class="hero-visual">
+        <script type="module" src="https://unpkg.com/@splinetool/viewer@1.12.52/build/spline-viewer.js">	</script>
+	<spline-viewer
+  		url="https://prod.spline.design/hNaQs9X1aS-mbjAV/scene.splinecode"
+  		transparent
+	></spline-viewer>
+      </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-ribbon reveal">
+  <div class="stat-item"><div class="stat-number" data-count="42">0</div><div class="stat-label" id="statScenarios">Historical Scenarios</div></div>
+  <div class="stat-item"><div class="stat-number" data-count="186">0</div><div class="stat-label" id="statLinks">Causal Links</div></div>
+  <div class="stat-item"><div class="stat-number" data-count="6">0</div><div class="stat-label" id="statMissions">Mission Types</div></div>
+  <div class="stat-item"><div class="stat-number" data-count="1200">0</div><div class="stat-label" id="statTesters">Beta Testers</div></div>
+</div>
+
+<!-- OUR MISSION -->
+<section class="mission-section" id="mission">
+  <div class="mission-inner reveal">
+    <div class="section-eyebrow" id="missionEyebrow">Our Mission</div>
+    <h2 class="section-title" id="missionTitle">Stop memorizing. Start <em>understanding.</em></h2>
+    <p class="section-desc" id="missionDesc">Traditional history education rewards recall. We reward reasoning. CHRONOLOOP is built on three principles that change how you engage with the past.</p>
+    <div class="mission-pillars">
+      <div class="mission-pillar"><div class="pillar-num">01</div><h3 id="pillar1Title">Causality Over Chronology</h3><p id="pillar1Desc">Events don't exist in isolation. Every war, reform, and revolution has roots. We teach you to trace them.</p></div>
+      <div class="mission-pillar"><div class="pillar-num">02</div><h3 id="pillar2Title">Perspective is Everything</h3><p id="pillar2Desc">An economist, a general, and a philosopher walk into the same event — and see three different stories. So should you.</p></div>
+      <div class="mission-pillar"><div class="pillar-num">03</div><h3 id="pillar3Title">Compete to Comprehend</h3><p id="pillar3Desc">Nothing sharpens your thinking like defending it. Our arena mode forces you to argue, adapt, and win with evidence.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="reveal">
+    <div class="section-eyebrow" id="howEyebrow">How It Works</div>
+    <h2 class="section-title" id="howTitle">Learn like a <em>strategist</em>, not a student</h2>
+    <p class="section-desc" id="howDesc">Three core mechanics, each designed to build a different type of historical thinking.</p>
+  </div>
+  <div class="how-steps">
+    <div class="how-step reveal reveal-delay-1">
+      <div class="how-step-marker"><svg viewBox="0 0 24 24" fill="none"><path d="M10 14l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 11a4 4 0 0 1 0-5.66L9.12 3.22a4 4 0 0 1 5.66 5.66" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M17 13a4 4 0 0 1 0 5.66l-2.12 2.12a4 4 0 0 1-5.66-5.66" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+      <div class="how-step-text"><h3 id="how1Title">Build Cause Chains</h3><p id="how1Desc">Drag causes into events. The system validates your logic against our historical dataset and awards XP for correct connections.</p></div>
+      <div class="how-step-visual"><div class="cause-chain-demo"><div class="cc-node cause">Trade Shock</div><div class="cc-arrow">→</div><div class="cc-node cause">Famine</div><div class="cc-arrow">→</div><div class="cc-node event">Revolution</div></div></div>
+    </div>
+    <div class="how-step reveal reveal-delay-2">
+      <div class="how-step-marker"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5C6 5 2 12 2 12s4 7 10 7 10-7 10-7-4-7-10-7z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div>
+      <div class="how-step-text"><h3 id="how2Title">Shift Perspectives</h3><p id="how2Desc">Toggle between economic, military, and ideological lenses. The same event reveals completely different priorities.</p></div>
+      <div class="how-step-visual"><div class="perspective-demo" id="perspDemo"><div class="persp-toggles"><button class="persp-btn active" data-p="econ">Economy</button><button class="persp-btn" data-p="mil">Military</button><button class="persp-btn" data-p="ideo">Ideology</button></div><div class="persp-bar-group"><div class="persp-bar"><div class="persp-bar-fill" id="pb1" style="width:80%;background:var(--accent-teal)"></div></div><div class="persp-bar"><div class="persp-bar-fill" id="pb2" style="width:30%;background:var(--accent-rose)"></div></div><div class="persp-bar"><div class="persp-bar-fill" id="pb3" style="width:50%;background:var(--accent-blue)"></div></div></div></div></div>
+    </div>
+    <div class="how-step reveal reveal-delay-3">
+      <div class="how-step-marker"><svg viewBox="0 0 24 24" fill="none"><path d="M4 18L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14 4v4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 18L10 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 4v4H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="how-step-text"><h3 id="how3Title">Compete in the Arena</h3><p id="how3Desc">Face off 1v1 against an AI historian. Pick 3 causal factors to explain an event. Score for evidence, lose for contradictions.</p></div>
+      <div class="how-step-visual"><div class="arena-demo" id="arenaDemo"><div class="arena-player"><div class="arena-avatar you">You</div><div class="arena-name">Player</div><div class="arena-score-bar"><div class="arena-score-fill you" id="arenaYou" style="width:0%"></div></div></div><div class="arena-vs">VS</div><div class="arena-player"><div class="arena-avatar ai">AI</div><div class="arena-name">Opponent</div><div class="arena-score-bar"><div class="arena-score-fill ai" id="arenaAI" style="width:0%"></div></div></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ERAS -->
+<section class="eras-section" id="eras">
+  <div class="eras-inner">
+    <div class="reveal">
+      <div class="section-eyebrow" id="erasEyebrow">Explore</div>
+      <h2 class="section-title" id="erasTitle">Dive into the eras that <em>shaped</em> the world</h2>
+      <p class="section-desc" id="erasDesc">From ancient empires to cold war standoffs. Click any era to explore its conflicts, causes, and key decisions.</p>
+    </div>
+    <div class="eras-grid" id="erasGrid">
+      <div class="era-card reveal reveal-delay-1" data-era="roman" onclick="toggleEra('roman')">
+        <div class="era-shape-container"><svg class="era-icon" viewBox="0 0 80 80" fill="none" style="width:80px;height:80px;opacity:0.2;transition:opacity 0.6s,transform 0.6s"><circle cx="40" cy="40" r="18" stroke="#c45c5c" stroke-width="1.5" fill="none"/><circle cx="40" cy="40" r="14" stroke="#c45c5c" stroke-width="0.6" fill="none" opacity="0.3"/><line x1="40" y1="22" x2="40" y2="14" stroke="#c45c5c" stroke-width="1.5"/><path d="M36 14L40 10L44 14" stroke="#c45c5c" stroke-width="1" fill="none"/><path d="M44 12L48 8" stroke="#c45c5c" stroke-width="0.8"/><path d="M46 10L50 12" stroke="#c45c5c" stroke-width="0.6" opacity="0.6"/><path d="M47 7L51 9" stroke="#c45c5c" stroke-width="0.6" opacity="0.4"/><path d="M26 34L22 30" stroke="#c45c5c" stroke-width="0.8" opacity="0.5"/><path d="M54 34L58 30" stroke="#c45c5c" stroke-width="0.8" opacity="0.5"/><path d="M26 46L22 50" stroke="#c45c5c" stroke-width="0.8" opacity="0.5"/><path d="M54 46L58 50" stroke="#c45c5c" stroke-width="0.8" opacity="0.5"/><circle cx="40" cy="40" r="4" stroke="#c45c5c" stroke-width="0.8" fill="none" opacity="0.5"/><line x1="36" y1="40" x2="44" y2="40" stroke="#c45c5c" stroke-width="0.5" opacity="0.4"/><line x1="40" y1="36" x2="40" y2="44" stroke="#c45c5c" stroke-width="0.5" opacity="0.4"/><path d="M28 58C28 58 34 64 40 66C46 64 52 58 52 58" stroke="#c45c5c" stroke-width="0.6" fill="none" opacity="0.3"/></svg></div>
+        <div class="era-date">753 BC – 476 AD</div><h3 id="eraRomanName">Roman Empire</h3><div class="era-tag" style="color:var(--gold-primary)" id="eraRomanTag">12 scenarios · 28 links</div>
+      </div>
+      <div class="era-card reveal reveal-delay-2" data-era="medieval" onclick="toggleEra('medieval')">
+        <div class="era-shape-container"><svg class="era-icon" viewBox="0 0 80 80" fill="none" style="width:80px;height:80px;opacity:0.2;transition:opacity 0.6s,transform 0.6s"><rect x="22" y="30" width="36" height="35" stroke="#4a9e8e" stroke-width="1.2" fill="none" rx="1"/><rect x="16" y="25" width="12" height="40" stroke="#4a9e8e" stroke-width="1" fill="none" rx="1"/><rect x="52" y="25" width="12" height="40" stroke="#4a9e8e" stroke-width="1" fill="none" rx="1"/><rect x="18" y="18" width="3" height="7" stroke="#4a9e8e" stroke-width="0.8" fill="none"/><rect x="23" y="18" width="3" height="7" stroke="#4a9e8e" stroke-width="0.8" fill="none"/><rect x="54" y="18" width="3" height="7" stroke="#4a9e8e" stroke-width="0.8" fill="none"/><rect x="59" y="18" width="3" height="7" stroke="#4a9e8e" stroke-width="0.8" fill="none"/><rect x="35" y="12" width="10" height="18" stroke="#4a9e8e" stroke-width="1" fill="none" rx="1"/><rect x="37" y="6" width="2.5" height="6" stroke="#4a9e8e" stroke-width="0.8" fill="none"/><rect x="40.5" y="6" width="2.5" height="6" stroke="#4a9e8e" stroke-width="0.8" fill="none"/><path d="M36 65 L36 50 Q40 46 44 50 L44 65" stroke="#4a9e8e" stroke-width="1" fill="none"/><line x1="40" y1="8" x2="40" y2="4" stroke="#4a9e8e" stroke-width="0.8"/><line x1="38" y1="5" x2="42" y2="5" stroke="#4a9e8e" stroke-width="0.8"/></svg></div>
+        <div class="era-date">500 – 1500 AD</div><h3 id="eraMedievalName">Medieval World</h3><div class="era-tag" style="color:var(--accent-teal)" id="eraMedievalTag">8 scenarios · 19 links</div>
+      </div>
+      <div class="era-card reveal reveal-delay-3" data-era="ww2" onclick="toggleEra('ww2')">
+        <div class="era-shape-container"><svg class="era-icon" viewBox="0 0 80 80" fill="none" style="width:80px;height:80px;opacity:0.2;transition:opacity 0.6s,transform 0.6s"><path d="M16 42C16 26 26 16 40 16C54 16 64 26 64 42C64 46 62 50 58 52L56 53C54 54 50 55 48 55L32 55C30 55 26 54 24 53L22 52C18 50 16 46 16 42Z" stroke="#c45c5c" stroke-width="1.5" fill="none"/><path d="M14 48C14 48 16 56 24 60L28 62L52 62L56 60C64 56 66 48 66 48" stroke="#c45c5c" stroke-width="1.2" fill="none" stroke-linecap="round"/><line x1="14" y1="48" x2="66" y2="48" stroke="#c45c5c" stroke-width="1.2" stroke-linecap="round"/><path d="M20 42C20 30 28 20 40 20C52 20 60 30 60 42" stroke="#c45c5c" stroke-width="0.6" fill="none" opacity="0.4"/><circle cx="40" cy="38" r="4" stroke="#c45c5c" stroke-width="0.8" fill="none" opacity="0.5"/><line x1="36" y1="38" x2="44" y2="38" stroke="#c45c5c" stroke-width="0.6" opacity="0.5"/><line x1="40" y1="34" x2="40" y2="42" stroke="#c45c5c" stroke-width="0.6" opacity="0.5"/></svg></div>
+        <div class="era-date">1939 – 1945</div><h3 id="eraWw2Name">World War II</h3><div class="era-tag" style="color:var(--accent-rose)" id="eraWw2Tag">14 scenarios · 42 links</div>
+      </div>
+      <div class="era-card reveal reveal-delay-4" data-era="coldwar" onclick="toggleEra('coldwar')">
+        <div class="era-shape-container"><svg class="era-icon" viewBox="0 0 80 80" fill="none" style="width:80px;height:80px;opacity:0.2;transition:opacity 0.6s,transform 0.6s"><path d="M40 10C40 10 42 16 42 28L42 48C42 52 44 56 46 58L50 64L40 70L30 64L34 58C36 56 38 52 38 48L38 28C38 16 40 10 40 10Z" stroke="#5b7fb8" stroke-width="1.3" fill="none"/><path d="M38 36L28 44L30 50L38 46" stroke="#5b7fb8" stroke-width="1" fill="none" stroke-linejoin="round"/><path d="M42 36L52 44L50 50L42 46" stroke="#5b7fb8" stroke-width="1" fill="none" stroke-linejoin="round"/><circle cx="40" cy="24" r="3" stroke="#5b7fb8" stroke-width="0.8" fill="none"/><path d="M36 64L34 72L40 70L46 72L44 64" stroke="#5b7fb8" stroke-width="0.8" fill="none" opacity="0.6"/><line x1="37" y1="72" x2="35" y2="78" stroke="#5b7fb8" stroke-width="0.6" opacity="0.4"/><line x1="40" y1="70" x2="40" y2="78" stroke="#5b7fb8" stroke-width="0.6" opacity="0.4"/><line x1="43" y1="72" x2="45" y2="78" stroke="#5b7fb8" stroke-width="0.6" opacity="0.4"/><ellipse cx="40" cy="40" rx="18" ry="6" stroke="#5b7fb8" stroke-width="0.5" opacity="0.25" transform="rotate(30 40 40)"/><ellipse cx="40" cy="40" rx="18" ry="6" stroke="#5b7fb8" stroke-width="0.5" opacity="0.25" transform="rotate(-30 40 40)"/></svg></div>
+        <div class="era-date">1947 – 1991</div><h3 id="eraColdwarName">Cold War</h3><div class="era-tag" style="color:var(--accent-blue)" id="eraColdwarTag">8 scenarios · 24 links</div>
+      </div>
+    </div>
+    <div class="era-detail" id="eraDetail"></div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <div class="reveal">
+    <div class="section-eyebrow" id="featuresEyebrow">Platform Features</div>
+    <h2 class="section-title" id="featuresTitle">Everything you need to <em>think</em> historically</h2>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card span-7 reveal reveal-delay-1">
+      <div class="feature-card-icon teal"><svg viewBox="0 0 20 20" fill="none"><line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.2"/><circle cx="5" cy="10" r="2" stroke="currentColor" stroke-width="1.2"/><circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="10" r="2" stroke="currentColor" stroke-width="1.2"/></svg></div>
+      <h3 id="feat1Title">Interactive Timeline</h3><p id="feat1Desc">Click nodes to explore actors, causes, and effects. Link events together to discover hidden connections and earn discovery XP.</p>
+      <div class="feature-visual"><div class="tl-interactive"><div class="tl-node-i n1"><div class="tl-tooltip">Trade Reform</div></div><div class="tl-line-i"></div><div class="tl-node-i n2"><div class="tl-tooltip">Border Crisis</div></div><div class="tl-line-i"></div><div class="tl-node-i n3"><div class="tl-tooltip">Civil Revolt</div></div><div class="tl-line-i"></div><div class="tl-node-i n1"><div class="tl-tooltip">Peace Treaty</div></div><div class="tl-line-i"></div><div class="tl-node-i n4"><div class="tl-tooltip">New Order</div></div></div></div>
+    </div>
+    <div class="feature-card span-5 reveal reveal-delay-2">
+      <div class="feature-card-icon gold"><svg viewBox="0 0 20 20" fill="none"><path d="M2 4l5-2 6 3 5-2v14l-5 2-6-3-5 2V4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+      <h3 id="feat2Title">Strategic Map</h3><p id="feat2Desc">Toggle economy, military, and ideology overlays. Watch influence shift across regions as events unfold.</p>
+      <div class="feature-visual">
+        <svg class="map-interactive" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%">
+          <defs><filter id="g2"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+          <path d="M30 30 Q55 18 85 32 Q105 42 100 62 Q90 80 55 75 Q30 68 25 48 Z" fill="rgba(74,158,142,0.12)" stroke="rgba(74,158,142,0.25)" stroke-width="0.5"><animate attributeName="opacity" values="0.8;1;0.8" dur="3s" repeatCount="indefinite"/></path>
+          <path d="M130 22 Q165 12 195 28 Q215 38 225 58 Q220 78 190 82 Q155 78 138 52 Z" fill="rgba(212,168,83,0.12)" stroke="rgba(212,168,83,0.25)" stroke-width="0.5"><animate attributeName="opacity" values="0.7;1;0.7" dur="4s" repeatCount="indefinite"/></path>
+          <path d="M255 32 Q285 18 315 28 Q335 42 330 62 Q315 82 285 78 Q260 68 250 48 Z" fill="rgba(196,92,92,0.1)" stroke="rgba(196,92,92,0.2)" stroke-width="0.5"/>
+          <path d="M345 42 Q368 32 388 48 Q392 62 378 72 Q362 78 345 68 Z" fill="rgba(91,127,184,0.1)" stroke="rgba(91,127,184,0.2)" stroke-width="0.5"/>
+          <circle cx="65" cy="48" r="4" fill="#4a9e8e" opacity="0.6" filter="url(#g2)"><animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="180" cy="48" r="5" fill="#d4a853" opacity="0.7" filter="url(#g2)"><animate attributeName="r" values="4;6;4" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="295" cy="52" r="4" fill="#c45c5c" opacity="0.5" filter="url(#g2)"><animate attributeName="r" values="3;5;3" dur="3s" repeatCount="indefinite"/></circle>
+          <line x1="69" y1="48" x2="176" y2="48" stroke="rgba(212,168,83,0.12)" stroke-width="0.5" stroke-dasharray="3 5"><animate attributeName="stroke-dashoffset" from="0" to="-16" dur="2s" repeatCount="indefinite"/></line>
+          <line x1="184" y1="48" x2="291" y2="52" stroke="rgba(212,168,83,0.12)" stroke-width="0.5" stroke-dasharray="3 5"><animate attributeName="stroke-dashoffset" from="0" to="-16" dur="2s" repeatCount="indefinite"/></line>
+        </svg>
+      </div>
+    </div>
+    <div class="feature-card span-5 reveal reveal-delay-1">
+      <div class="feature-card-icon rose"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2L3 5v5c0 4.4 3 8.5 7 10 4-1.5 7-5.6 7-10V5l-7-3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M7 10l2.5 2.5L13 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <h3 id="feat3Title">Arena Mode</h3><p id="feat3Desc">1v1 against an AI historian. Build the strongest causal argument in timed rounds. Points for evidence, penalties for contradictions.</p>
+    </div>
+    <div class="feature-card span-7 reveal reveal-delay-2">
+      <div class="feature-card-icon blue"><svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M3 8h14M8 3v14" stroke="currentColor" stroke-width="0.8" opacity="0.4"/><circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.5"/></svg></div>
+      <h3 id="feat4Title">XP, Levels & Adaptive Difficulty</h3><p id="feat4Desc">Every correct link, every won debate earns XP. Level up to unlock hard mode, reduce hints, and access deeper scenarios. Progress saved automatically.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section reveal" id="signup">
+  <div class="cta-card">
+    <h2 class="section-title" id="ctaTitle">Ready to <em>rethink</em> history?</h2>
+    <p class="section-desc" id="ctaDesc">Join the beta. Be among the first to experience history as a strategy game, not a textbook.</p>
+    <div class="cta-form">
+      <input class="cta-input" type="email" id="ctaEmail" placeholder="Enter your email">
+      <button class="cta-submit" id="ctaSubmitBtn" onclick="ctaSignup()">Join Free Beta</button>
+    </div>
+    <div class="cta-note" id="ctaNote">Free during beta. No credit card required.</div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+
+    <div class="footer-left">
+      <div class="footer-copy" id="footerCopy">
+        &copy; 2026 CHRONOLOOP — History and Society in the Virtual Dimension Project
+      </div>
+      <div class="footer-credit" id="footerCredit"></div>
+    </div>
+
+    <div class="footer-links">
+      <a href="#" id="footerAbout">About</a>
+      <a href="#" id="footerContact">Contact</a>
+      <a href="#" id="footerPrivacy">Privacy</a>
+    </div>
+
+  </div>
+</footer>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()"><svg viewBox="0 0 20 20" fill="none"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    <h2 id="modalTitle">Create your account</h2>
+    <p class="modal-sub" id="modalSub">Begin your journey through cause and consequence.</p>
+    <div id="registerFields"><div class="form-group"><label class="form-label">Display Name</label><input class="form-input" type="text" id="regName" placeholder="e.g. HistoryNerd42"></div></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="regEmail" placeholder="you@example.com"></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="regPass" placeholder="Min. 8 characters"></div>
+    <div id="authError" style="color:#c45c5c;font-size:0.78rem;margin-top:0.5rem;display:none;"></div>
+    <button class="btn-submit" id="modalSubmit" onclick="handleSubmit()">Create Account</button>
+    <div class="modal-footer" id="modalFooter">Already have an account? <a onclick="openModal('login')">Log in</a></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ─── Intro Cutscene ───
+  const intro = document.getElementById('introCutscene');
+  const introAlreadyShown = localStorage.getItem('cl_intro_shown');
+  if (introAlreadyShown) {
+    intro.style.display = 'none';
+    document.body.style.overflow = '';
+  } else {
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Intro particle canvas - MORE particles
+  const ic = document.getElementById('introCanvas');
+  const ictx = ic.getContext('2d');
+  let introDots = [], introAnimating = !introAlreadyShown;
+  function initIntroParticles() {
+    ic.width = window.innerWidth; ic.height = window.innerHeight; introDots = [];
+    for (let i = 0; i < 160; i++) introDots.push({
+      x: Math.random()*ic.width, y: Math.random()*ic.height,
+      vx: (Math.random()-0.5)*0.4, vy: (Math.random()-0.5)*0.4,
+      r: Math.random()*2+0.2, o: Math.random()*0.25+0.02,
+      pulse: Math.random()*Math.PI*2, pulseSpeed: 0.01+Math.random()*0.02
+    });
+  }
+  function drawIntroParticles() {
+    if (!introAnimating) return;
+    ictx.clearRect(0, 0, ic.width, ic.height);
+    for (let i = 0; i < introDots.length; i++) {
+      const p = introDots[i]; p.x += p.vx; p.y += p.vy;
+      p.pulse += p.pulseSpeed;
+      const po = p.o * (0.6 + 0.4 * Math.sin(p.pulse));
+      if (p.x < 0 || p.x > ic.width) p.vx *= -1;
+      if (p.y < 0 || p.y > ic.height) p.vy *= -1;
+      ictx.beginPath(); ictx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ictx.fillStyle = `rgba(212,168,83,${po})`; ictx.fill();
+      for (let j = i+1; j < introDots.length; j++) {
+        const q = introDots[j], d = Math.hypot(p.x-q.x, p.y-q.y);
+        if (d < 100) {
+          ictx.strokeStyle = `rgba(212,168,83,${(1-d/100)*0.05})`;
+          ictx.lineWidth = 0.5; ictx.beginPath();
+          ictx.moveTo(p.x, p.y); ictx.lineTo(q.x, q.y); ictx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(drawIntroParticles);
+  }
+  if (!introAlreadyShown) {
+    initIntroParticles(); drawIntroParticles();
+
+    // Show floating objects
+    setTimeout(() => { document.querySelectorAll('.float-obj').forEach((o,i) => setTimeout(() => o.classList.add('vis'), i*120)); }, 200);
+
+    // Stagger papers (now 8)
+    const papers = ['paperA','paperB','paperC','paperD','paperF','paperG','paperH','paperE'].map(id => document.getElementById(id));
+    papers.forEach((p, i) => {
+      if (p) setTimeout(() => { p.style.opacity = '1'; p.classList.add('visible'); }, 300 + i * 250);
+    });
+
+    // Stamp
+    setTimeout(() => { document.getElementById('accessStamp').classList.add('slam'); }, 2800);
+
+    // Terminal text cycling
+    const termLines = [
+      '> INIT temporal_database...',
+      '> LOADING causal_models [42 scenarios]',
+      '> DECRYPT classified_archives...',
+      '> VERIFY temporal_integrity ████████ OK',
+      '> SYNC perspective_engines...',
+      '> MOUNT arena_subsystem...',
+      '> AUTH temporal_clearance GRANTED',
+    ];
+    let termIdx = 0;
+    const termEl = document.getElementById('introTerminal');
+    function cycleTerminal() {
+      if (!introAnimating || termIdx >= termLines.length) return;
+      const line = termLines[termIdx];
+      termEl.innerHTML = (termIdx > 0 ? '<span style="opacity:0.3">' + termLines[termIdx-1] + '</span><br>' : '') + '<span class="cmd">' + line + '</span>';
+      termIdx++;
+      setTimeout(cycleTerminal, 500 + Math.random()*300);
+    }
+
+    // Show loading
+    setTimeout(() => {
+      document.getElementById('introLoading').classList.add('visible');
+      document.getElementById('introRing').classList.add('visible');
+      cycleTerminal();
+    }, 3000);
+  } // end if !introAlreadyShown
+
+  // Progress bar (only runs if intro is visible)
+  if (!introAlreadyShown) setTimeout(() => {
+    const bar = document.getElementById('introBar');
+    const pct = document.getElementById('introPct');
+    let progress = 0;
+    const iv = setInterval(() => {
+      progress += Math.random() * 12 + 5;
+      if (progress >= 100) {
+        progress = 100; clearInterval(iv);
+        pct.textContent = '100%';
+        bar.style.width = '100%';
+        setTimeout(() => {
+          intro.classList.add('fade-out');
+          localStorage.setItem('cl_intro_shown', '1');
+          setTimeout(() => { intro.style.display = 'none'; introAnimating = false; document.body.style.overflow = ''; }, 1200);
+        }, 500);
+      }
+      pct.textContent = Math.round(progress) + '%';
+      bar.style.width = progress + '%';
+    }, 220);
+  }, 3200);
+
+  // ─── Hero Particles ───
+  const hc = document.getElementById('heroBg'), hctx = hc.getContext('2d');
+  let hp = [];
+  function resH() { hc.width = window.innerWidth; hc.height = window.innerHeight; }
+  function initH() { hp = []; for (let i = 0; i < 90; i++) hp.push({ x: Math.random()*hc.width, y: Math.random()*hc.height, vx: (Math.random()-0.5)*0.25, vy: (Math.random()-0.5)*0.25, r: Math.random()*1.5+0.3, o: Math.random()*0.3+0.04 }); }
+  function drawH() {
+    hctx.clearRect(0, 0, hc.width, hc.height);
+    for (let i = 0; i < hp.length; i++) {
+      const p = hp[i]; p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > hc.width) p.vx *= -1;
+      if (p.y < 0 || p.y > hc.height) p.vy *= -1;
+      hctx.beginPath(); hctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      hctx.fillStyle = `rgba(212,168,83,${p.o})`; hctx.fill();
+      for (let j = i+1; j < hp.length; j++) {
+        const q = hp[j], d = Math.hypot(p.x-q.x, p.y-q.y);
+        if (d < 110) { hctx.strokeStyle = `rgba(212,168,83,${(1-d/110)*0.06})`; hctx.lineWidth = 0.5; hctx.beginPath(); hctx.moveTo(p.x, p.y); hctx.lineTo(q.x, q.y); hctx.stroke(); }
+      }
+    }
+    requestAnimationFrame(drawH);
+  }
+  resH(); initH(); drawH();
+  window.addEventListener('resize', () => { resH(); initH(); });
+
+  // ─── Nav ───
+  window.addEventListener('scroll', () => { document.getElementById('mainNav').classList.toggle('scrolled', window.scrollY > 40); });
+  document.getElementById('navToggle').addEventListener('click', () => { document.getElementById('navLinks').classList.toggle('open'); });
+
+  // ─── Reveal ───
+  const ro = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); ro.unobserve(e.target); } }); }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => ro.observe(el));
+
+  // ─── Counters ───
+  const co = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting) { const t = +e.target.dataset.count; let c = 0; const s = t/35, iv = setInterval(() => { c += s; if (c >= t) { c = t; clearInterval(iv); } e.target.textContent = Math.round(c).toLocaleString(); }, 30); co.unobserve(e.target); } }); }, { threshold: 0.5 });
+  document.querySelectorAll('[data-count]').forEach(el => co.observe(el));
+
+  // ─── Perspective Demo ───
+  const pd = { econ: [80,30,50], mil: [25,85,40], ideo: [40,45,90] };
+  document.querySelectorAll('.persp-btn').forEach(b => { b.addEventListener('click', () => {
+    document.querySelectorAll('.persp-btn').forEach(x => x.classList.remove('active')); b.classList.add('active');
+    const v = pd[b.dataset.p]; document.getElementById('pb1').style.width=v[0]+'%'; document.getElementById('pb2').style.width=v[1]+'%'; document.getElementById('pb3').style.width=v[2]+'%';
+  }); });
+
+  // ─── Arena Demo ───
+  const ao = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting) { setTimeout(() => { document.getElementById('arenaYou').style.width='72%'; document.getElementById('arenaAI').style.width='58%'; }, 400); ao.unobserve(e.target); } }); }, { threshold: 0.5 });
+  ao.observe(document.getElementById('arenaDemo'));
+
+  // ─── Feature card glow follow ───
+  document.querySelectorAll('.feature-card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', ((e.clientX - r.left)/r.width*100)+'%');
+      card.style.setProperty('--my', ((e.clientY - r.top)/r.height*100)+'%');
+    });
+  });
+
+  // ─── Eras with Particle Canvas Detail ───
+  const eraInfo = {
+    roman: {
+      title: 'The Roman Empire', title_ro: 'Imperiul Roman',
+      desc: 'From the founding of Rome to the fall of the Western Empire \u2014 explore the political, economic, and military forces that built and destroyed the greatest empire of the ancient world.',
+      desc_ro: 'De la fondarea Romei până la căderea Imperiului de Vest — explorează forțele politice, economice și militare care au construit și distrus cel mai mare imperiu al lumii antice.',
+      tags: [{label:'Trade Networks',label_ro:'Rețele Comerciale',cls:'econ'},{label:'Legion Warfare',label_ro:'Războiul Legiunilor',cls:'mil'},{label:'Republican Ideals',label_ro:'Idealuri Republicane',cls:'ideo'},{label:'Senate Diplomacy',label_ro:'Diplomația Senatului',cls:'diplo'}],
+      color: [212,168,83],
+      // Eagle constellation points (normalized 0-1)
+      points: [[0.5,0.05],[0.42,0.15],[0.35,0.1],[0.58,0.15],[0.65,0.1],[0.5,0.2],[0.5,0.55],[0.35,0.5],[0.65,0.5],[0.3,0.35],[0.7,0.35],[0.25,0.4],[0.75,0.4],[0.5,0.65],[0.42,0.7],[0.58,0.7],[0.42,0.85],[0.58,0.85],[0.38,0.9],[0.62,0.9]]
+    },
+    medieval: {
+      title: 'The Medieval World', title_ro: 'Lumea Medievală',
+      desc: 'Feudalism, crusades, plagues, and the seeds of the Renaissance. Trace how power shifted between kings, popes, and merchants across five centuries.',
+      desc_ro: 'Feudalism, cruciade, ciume și semințele Renașterii. Urmărește cum puterea s-a mutat între regi, papi și comercianți de-a lungul a cinci secole.',
+      tags: [{label:'Feudal Economy',label_ro:'Economie Feudală',cls:'econ'},{label:'Siege Warfare',label_ro:'Războiul de Asediu',cls:'mil'},{label:'Religious Authority',label_ro:'Autoritate Religioasă',cls:'ideo'},{label:'Royal Alliances',label_ro:'Alianțe Regale',cls:'diplo'}],
+      color: [74,158,142],
+      // Castle constellation
+      points: [[0.2,0.85],[0.2,0.4],[0.15,0.4],[0.15,0.3],[0.2,0.3],[0.25,0.3],[0.25,0.4],[0.35,0.4],[0.35,0.55],[0.8,0.85],[0.8,0.4],[0.75,0.4],[0.75,0.3],[0.8,0.3],[0.85,0.3],[0.85,0.4],[0.65,0.4],[0.65,0.55],[0.5,0.15],[0.45,0.25],[0.55,0.25],[0.5,0.55],[0.35,0.85],[0.65,0.85],[0.45,0.7],[0.55,0.7]]
+    },
+    ww2: {
+      title: 'World War II', title_ro: 'Al Doilea Război Mondial',
+      desc: 'The deadliest conflict in human history. Understand the economic pressures, ideological extremism, and strategic blunders that shaped the modern world.',
+      desc_ro: 'Cel mai mortal conflict din istoria umanității. Înțelege presiunile economice, extremismul ideologic și erorile strategice care au modelat lumea modernă.',
+      tags: [{label:'War Economy',label_ro:'Economie de Război',cls:'econ'},{label:'Total War',label_ro:'Război Total',cls:'mil'},{label:'Fascism vs Democracy',label_ro:'Fascism vs Democrație',cls:'ideo'},{label:'Allied Coalition',label_ro:'Coaliția Aliată',cls:'diplo'}],
+      color: [196,92,92],
+      // Bomb/explosion constellation
+      points: [[0.5,0.15],[0.5,0.05],[0.55,0.08],[0.58,0.03],[0.5,0.5],[0.35,0.35],[0.65,0.35],[0.3,0.5],[0.7,0.5],[0.35,0.65],[0.65,0.65],[0.25,0.6],[0.75,0.6],[0.5,0.75],[0.4,0.8],[0.6,0.8],[0.45,0.88],[0.55,0.88],[0.5,0.92]]
+    },
+    coldwar: {
+      title: 'The Cold War', title_ro: 'Războiul Rece',
+      desc: 'Proxy wars, nuclear brinkmanship, and the battle of ideas. Two superpowers shaped the modern world without ever firing directly at each other.',
+      desc_ro: 'Războaie prin interpuși, amenințări nucleare și bătălia ideilor. Două superputeri au modelat lumea modernă fără a trage vreodată direct una în cealaltă.',
+      tags: [{label:'Arms Race',label_ro:'Cursa Înarmării',cls:'econ'},{label:'Nuclear Deterrence',label_ro:'Descurajare Nucleară',cls:'mil'},{label:'Capitalism vs Communism',label_ro:'Capitalism vs Comunism',cls:'ideo'},{label:'UN & NATO',label_ro:'ONU și NATO',cls:'diplo'}],
+      color: [91,127,184],
+      // Rocket constellation
+      points: [[0.5,0.05],[0.45,0.15],[0.55,0.15],[0.47,0.25],[0.53,0.25],[0.47,0.5],[0.53,0.5],[0.47,0.65],[0.53,0.65],[0.4,0.7],[0.6,0.7],[0.35,0.75],[0.65,0.75],[0.47,0.75],[0.53,0.75],[0.45,0.85],[0.55,0.85],[0.5,0.95],[0.42,0.92],[0.58,0.92]]
+    }
+  };
+
+  let activeEra = null;
+  let eraCanvasAnim = null;
+
+  window.toggleEra = function(era) {
+    const panel = document.getElementById('eraDetail');
+    if (eraCanvasAnim) { cancelAnimationFrame(eraCanvasAnim); eraCanvasAnim = null; }
+    if (activeEra === era) { activeEra = null; panel.classList.remove('visible'); panel.style.display='none'; document.querySelectorAll('.era-card').forEach(c => c.classList.remove('active')); return; }
+    activeEra = era;
+    document.querySelectorAll('.era-card').forEach(c => c.classList.toggle('active', c.dataset.era === era));
+    const d = eraInfo[era];
+    const eTitle = splineLang==='ro' && d.title_ro ? d.title_ro : d.title;
+    const eDesc = splineLang==='ro' && d.desc_ro ? d.desc_ro : d.desc;
+    panel.innerHTML = `<div><h4>${eTitle}</h4><p>${eDesc}</p><div class="era-detail-tags">${d.tags.map(t => `<span class="era-detail-tag ${t.cls}">${splineLang==='ro' && t.label_ro ? t.label_ro : t.label}</span>`).join('')}</div></div><div class="era-detail-visual"><canvas class="era-detail-canvas" id="eraCanvas" width="240" height="240"></canvas></div>`;
+    panel.style.display = 'grid'; panel.classList.add('visible');
+    panel.style.animation = 'none'; panel.offsetHeight; panel.style.animation = 'panelSlideIn 0.5s var(--ease-out-expo)';
+
+    // Animate constellation
+    const cvs = document.getElementById('eraCanvas');
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    const pts = d.points.map(p => ({
+      tx: p[0]*220+10, ty: p[1]*220+10,
+      x: Math.random()*240, y: Math.random()*240,
+      phase: Math.random()*Math.PI*2
+    }));
+    // Ambient floating particles
+    const ambient = [];
+    for (let i=0; i<40; i++) ambient.push({
+      x: Math.random()*240, y: Math.random()*240,
+      vx: (Math.random()-0.5)*0.3, vy: (Math.random()-0.5)*0.3,
+      r: Math.random()*1.2+0.3, o: Math.random()*0.15+0.02
+    });
+    let et = 0;
+    function drawEra() {
+      et += 0.016;
+      const lerp = Math.min(et/1.5, 1);
+      const ease = 1 - Math.pow(1-lerp, 3);
+      ctx.clearRect(0,0,240,240);
+      const [cr,cg,cb] = d.color;
+      // Ambient particles
+      for (const a of ambient) {
+        a.x += a.vx; a.y += a.vy;
+        if (a.x<0||a.x>240) a.vx*=-1;
+        if (a.y<0||a.y>240) a.vy*=-1;
+        ctx.beginPath(); ctx.arc(a.x,a.y,a.r,0,Math.PI*2);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.o})`; ctx.fill();
+      }
+      // Draw connections between nearby constellation points
+      for (let i=0; i<pts.length; i++) {
+        const p = pts[i];
+        p.x += (p.tx - p.x) * 0.05;
+        p.y += (p.ty - p.y) * 0.05;
+        const px = p.x + Math.sin(et*2+p.phase)*2;
+        const py = p.y + Math.cos(et*1.5+p.phase)*2;
+        for (let j=i+1; j<pts.length; j++) {
+          const q = pts[j];
+          const qx = q.x + Math.sin(et*2+q.phase)*2;
+          const qy = q.y + Math.cos(et*1.5+q.phase)*2;
+          const dd = Math.hypot(px-qx,py-qy);
+          if (dd < 80) {
+            ctx.strokeStyle = `rgba(${cr},${cg},${cb},${(1-dd/80)*0.25*ease})`;
+            ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(qx,qy); ctx.stroke();
+          }
+        }
+        // Draw point with glow
+        const glow = 3 + Math.sin(et*3+p.phase)*1.5;
+        ctx.beginPath(); ctx.arc(px,py,glow,0,Math.PI*2);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.08*ease})`; ctx.fill();
+        ctx.beginPath(); ctx.arc(px,py,2,0,Math.PI*2);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.7*ease})`; ctx.fill();
+      }
+      eraCanvasAnim = requestAnimationFrame(drawEra);
+    }
+    drawEra();
+  };
+
+  // ─── Modal & Auth ───
+  const API = window.location.origin;
+  let currentMode = 'register';
+
+  window.openModal = function(mode) {
+    currentMode = mode;
+    document.getElementById('authError').style.display = 'none';
+    document.getElementById('modalOverlay').classList.add('active');
+    // Update placeholders
+    var nameInput = document.getElementById('regName');
+    if(nameInput) nameInput.placeholder = st('modalNamePlaceholder');
+    var emailInput = document.getElementById('regEmail');
+    if(emailInput) emailInput.placeholder = st('modalEmailPlaceholder');
+    var passInput = document.getElementById('regPass');
+    if(passInput) passInput.placeholder = st('modalPassPlaceholder');
+    // Update labels
+    var nameLabel = document.querySelector('label[for="regName"]');
+    if(nameLabel) nameLabel.textContent = st('modalName');
+    var emailLabel = document.querySelector('label[for="regEmail"]');
+    if(emailLabel) emailLabel.textContent = st('modalEmail');
+    var passLabel = document.querySelector('label[for="regPass"]');
+    if(passLabel) passLabel.textContent = st('modalPassword');
+    if (mode === 'login') {
+      document.getElementById('modalTitle').textContent=st('modalLoginTitle');
+      document.getElementById('modalSub').textContent=st('modalLoginSub');
+      document.getElementById('registerFields').style.display='none';
+      document.getElementById('modalSubmit').textContent=st('modalLoginBtn');
+      document.getElementById('modalFooter').innerHTML=st('modalNewHere')+' <a onclick="openModal(\'register\')">'+st('modalCreateLink')+'</a>';
+    } else {
+      document.getElementById('modalTitle').textContent=st('modalCreateTitle');
+      document.getElementById('modalSub').textContent=st('modalCreateSub');
+      document.getElementById('registerFields').style.display='block';
+      document.getElementById('modalSubmit').textContent=st('modalCreateBtn');
+      document.getElementById('modalFooter').innerHTML=st('modalHasAccount')+' <a onclick="openModal(\'login\')">'+st('modalLoginLink')+'</a>';
+    }
+  };
+
+  window.closeModal = function() { document.getElementById('modalOverlay').classList.remove('active'); };
+  document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  function showAuthError(msg) {
+    const el = document.getElementById('authError');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  window.handleSubmit = async function() {
+    const btn = document.getElementById('modalSubmit');
+    const email = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPass').value;
+    const errEl = document.getElementById('authError');
+    errEl.style.display = 'none';
+
+    if (!email || !password) { showAuthError(st('modalFillFields')); return; }
+
+    const isLogin = currentMode === 'login';
+    const endpoint = isLogin ? '/api/login' : '/api/register';
+    const bodyData = { email, password };
+    if (!isLogin) {
+      const name = document.getElementById('regName').value.trim();
+      if (!name) { showAuthError(st('modalEnterName')); return; }
+      bodyData.displayName = name;
+    }
+
+    btn.disabled = true;
+    btn.textContent = isLogin ? st('modalLoggingIn') : st('modalCreating');
+
+    try {
+      const res = await fetch(API + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData)
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showAuthError(data.error || 'Something went wrong.');
+        btn.disabled = false;
+        btn.textContent = isLogin ? st('modalLoginBtn') : st('modalCreateBtn');
+        return;
+      }
+
+      // Success — store token and user data
+      localStorage.setItem('cl_token', data.token);
+      localStorage.setItem('cl_user', JSON.stringify(data.user));
+
+      btn.textContent = st('modalWelcome') + data.user.displayName + '!';
+      btn.style.background = '#4a9e8e';
+
+      setTimeout(() => {
+        closeModal();
+        // Redirect to hub
+        window.location.href = 'chronoloop_hub.html';
+      }, 900);
+    } catch (err) {
+      showAuthError(st('modalServerError'));
+      btn.disabled = false;
+      btn.textContent = isLogin ? st('modalLoginBtn') : st('modalCreateBtn');
+    }
+  };
+
+  window.ctaSignup = function() {
+    const e = document.getElementById('ctaEmail').value;
+    if (e && e.includes('@')) {
+      // Pre-fill the modal email and open register
+      openModal('register');
+      document.getElementById('regEmail').value = e;
+    } else {
+      openModal('register');
+    }
+  };
+
+  // ═══ LANGUAGE TOGGLE FOR SPLINE PAGE ═══
+  const splineFlagSvgs = {
+    en: '<rect width="640" height="480" fill="#012169"/><path d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z" fill="#fff"/><path d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z" fill="#C8102E"/><path d="M241 0v480h160V0zM0 160v160h640V160z" fill="#fff"/><path d="M0 193v96h640v-96zM273 0v480h96V0z" fill="#C8102E"/>',
+    ro: '<rect width="640" height="480" fill="#FCD116"/><rect width="213.3" height="480" fill="#002B7F"/><rect x="426.7" width="213.3" height="480" fill="#CE1126"/>'
+  };
+  let splineLang = localStorage.getItem('cl_lang') || 'en';
+
+  const sT = {
+    en: {
+      navHome:'Home',navWorldMap:'World Map',navArena:'Arena',navLeaderboard:'Leaderboard',
+      navLogin:'Log In',navJoinBeta:'Join the Beta',logout:'Logout',
+      heroBadge:'History and Society in the Virtual Dimension - Project',
+      heroTitle:'History isn\'t about dates.<br>It\'s about <em>why.</em>',
+      heroSubtitle:'Build causal models, debate perspectives, and compete in timed rounds. CHRONOLOOP turns passive memorization into active strategic thinking.',
+      heroStart:'Start Free',heroHow:'See How It Works',
+      statScenarios:'Historical Scenarios',statLinks:'Causal Links',statMissions:'Mission Types',statTesters:'Beta Testers',
+      missionEyebrow:'Our Mission',missionTitle:'Stop memorizing. Start <em>understanding.</em>',
+      missionDesc:'Traditional history education rewards recall. We reward reasoning. CHRONOLOOP is built on three principles that change how you engage with the past.',
+      pillar1Title:'Causality Over Chronology',pillar1Desc:'Events don\'t exist in isolation. Every war, reform, and revolution has roots. We teach you to trace them.',
+      pillar2Title:'Perspective is Everything',pillar2Desc:'An economist, a general, and a philosopher walk into the same event — and see three different stories. So should you.',
+      pillar3Title:'Compete to Comprehend',pillar3Desc:'Nothing sharpens your thinking like defending it. Our arena mode forces you to argue, adapt, and win with evidence.',
+      howEyebrow:'How It Works',howTitle:'Learn like a <em>strategist</em>, not a student',
+      howDesc:'Three core mechanics, each designed to build a different type of historical thinking.',
+      how1Title:'Build Cause Chains',how1Desc:'Drag causes into events. The system validates your logic against our historical dataset and awards XP for correct connections.',
+      how2Title:'Shift Perspectives',how2Desc:'Toggle between economic, military, and ideological lenses. The same event reveals completely different priorities.',
+      how3Title:'Compete in the Arena',how3Desc:'Face off 1v1 against an AI historian. Pick 3 causal factors to explain an event. Score for evidence, lose for contradictions.',
+      erasEyebrow:'Explore',erasTitle:'Dive into the eras that <em>shaped</em> the world',
+      erasDesc:'From ancient empires to cold war standoffs. Click any era to explore its conflicts, causes, and key decisions.',
+      eraRoman:'Roman Empire',eraMedieval:'Medieval World',eraWw2:'World War II',eraColdwar:'Cold War',
+      eraRomanTag:'12 scenarios · 28 links',eraMedievalTag:'8 scenarios · 19 links',eraWw2Tag:'14 scenarios · 42 links',eraColdwarTag:'8 scenarios · 24 links',
+      featEyebrow:'Platform Features',featTitle:'Everything you need to <em>think</em> historically',
+      feat1Title:'Interactive Timeline',feat1Desc:'Click nodes to explore actors, causes, and effects. Link events together to discover hidden connections and earn discovery XP.',
+      feat2Title:'Strategic Map',feat2Desc:'Toggle economy, military, and ideology overlays. Watch influence shift across regions as events unfold.',
+      feat3Title:'Arena Mode',feat3Desc:'1v1 against an AI historian. Build the strongest causal argument in timed rounds. Points for evidence, penalties for contradictions.',
+      feat4Title:'XP, Levels & Adaptive Difficulty',feat4Desc:'Every correct link, every won debate earns XP. Level up to unlock hard mode, reduce hints, and access deeper scenarios. Progress saved automatically.',
+      ctaTitle:'Ready to <em>rethink</em> history?',ctaDesc:'Join the beta. Be among the first to experience history as a strategy game, not a textbook.',
+      ctaPlaceholder:'Enter your email',ctaSubmit:'Join Free Beta',ctaNote:'Free during beta. No credit card required.',
+      footerCopy:'© 2026 CHRONOLOOP — History and Society in the Virtual Dimension Project',footerCredit:'Made by Lupu George Cristian from The National College of Informatics Tudor Vianu',footerAbout:'About',footerContact:'Contact',footerPrivacy:'Privacy',
+      modalCreateTitle:'Create your account',modalCreateSub:'Begin your journey through cause and consequence.',
+      modalLoginTitle:'Welcome back',modalLoginSub:'Continue where you left off.',
+      modalName:'Display Name',modalEmail:'Email',modalPassword:'Password',
+      modalNamePlaceholder:'e.g. HistoryNerd42',modalEmailPlaceholder:'you@example.com',modalPassPlaceholder:'Min. 8 characters',
+      modalCreateBtn:'Create Account',modalLoginBtn:'Log In',
+      modalHasAccount:'Already have an account?',modalNewHere:'New here?',modalLoginLink:'Log in',modalCreateLink:'Create an account',
+      modalFillFields:'Please fill in all fields.',modalEnterName:'Please enter a display name.',
+      modalLoggingIn:'Logging in...',modalCreating:'Creating account...',modalWelcome:'Welcome, ',
+      modalServerError:'Could not connect to server. Make sure the backend is running.'
+    },
+    ro: {
+      navHome:'Acasă',navWorldMap:'Harta Lumii',navArena:'Arena',navLeaderboard:'Clasament',
+      navLogin:'Conectare',navJoinBeta:'Alătură-te Beta',logout:'Deconectare',
+      heroBadge:'Proiect - "ISTORIE ŞI SOCIETATE ÎN DIMENSIUNE VIRTUALĂ"',
+      heroTitle:'Istoria nu e despre date.<br>E despre <em>de ce.</em>',
+      heroSubtitle:'Construiește modele cauzale, dezbate perspective și concurează în runde cronometrate. CHRONOLOOP transformă memorarea pasivă în gândire strategică activă.',
+      heroStart:'Începe Gratuit',heroHow:'Vezi Cum Funcționează',
+      statScenarios:'Scenarii Istorice',statLinks:'Legături Cauzale',statMissions:'Tipuri de Misiuni',statTesters:'Testeri Beta',
+      missionEyebrow:'Misiunea Noastră',missionTitle:'Nu mai memora. Începe să <em>înțelegi.</em>',
+      missionDesc:'Educația tradițională de istorie recompensează memorarea. Noi recompensăm raționamentul. CHRONOLOOP este construit pe trei principii care schimbă modul în care interacționezi cu trecutul.',
+      pillar1Title:'Cauzalitate în loc de Cronologie',pillar1Desc:'Evenimentele nu există izolat. Fiecare război, reformă și revoluție are rădăcini. Te învățăm să le descoperi.',
+      pillar2Title:'Perspectiva este Totul',pillar2Desc:'Un economist, un general și un filosof intră în același eveniment — și văd trei povești diferite. La fel ar trebui și tu.',
+      pillar3Title:'Concurează pentru a Înțelege',pillar3Desc:'Nimic nu îți ascute gândirea ca apărarea ei. Modul arenă te forțează să argumentezi, să te adaptezi și să câștigi cu dovezi.',
+      howEyebrow:'Cum Funcționează',howTitle:'Învață ca un <em>strateg</em>, nu ca un elev',
+      howDesc:'Trei mecanici de bază, fiecare proiectată să construiască un tip diferit de gândire istorică.',
+      how1Title:'Construiește Lanțuri Cauzale',how1Desc:'Trage cauzele în evenimente. Sistemul validează logica ta față de setul nostru de date istorice și acordă XP pentru conexiuni corecte.',
+      how2Title:'Schimbă Perspectivele',how2Desc:'Comută între lentilele economice, militare și ideologice. Același eveniment dezvăluie priorități complet diferite.',
+      how3Title:'Concurează în Arenă',how3Desc:'Înfruntă 1 la 1 un istoric AI. Alege 3 factori cauzali pentru a explica un eveniment. Puncte pentru dovezi, pierderi pentru contradicții.',
+      erasEyebrow:'Explorează',erasTitle:'Scufundă-te în erele care au <em>modelat</em> lumea',
+      erasDesc:'De la imperii antice la confruntările Războiului Rece. Click pe orice eră pentru a explora conflictele, cauzele și deciziile cheie.',
+      eraRoman:'Imperiul Roman',eraMedieval:'Lumea Medievală',eraWw2:'Al Doilea Război Mondial',eraColdwar:'Războiul Rece',
+      eraRomanTag:'12 scenarii · 28 legături',eraMedievalTag:'8 scenarii · 19 legături',eraWw2Tag:'14 scenarii · 42 legături',eraColdwarTag:'8 scenarii · 24 legături',
+      featEyebrow:'Funcționalități',featTitle:'Tot ce ai nevoie pentru a <em>gândi</em> istoric',
+      feat1Title:'Cronologie Interactivă',feat1Desc:'Click pe noduri pentru a explora actorii, cauzele și efectele. Leagă evenimente pentru a descoperi conexiuni ascunse și a câștiga XP.',
+      feat2Title:'Hartă Strategică',feat2Desc:'Comută între straturile economic, militar și ideologic. Urmărește cum influența se schimbă pe măsură ce evenimentele se desfășoară.',
+      feat3Title:'Modul Arenă',feat3Desc:'1 la 1 contra unui istoric AI. Construiește cel mai puternic argument cauzal în runde cronometrate. Puncte pentru dovezi, penalizări pentru contradicții.',
+      feat4Title:'XP, Nivele și Dificultate Adaptivă',feat4Desc:'Fiecare conexiune corectă, fiecare dezbatere câștigată aduce XP. Avansează pentru a debloca modul dificil și scenarii mai profunde. Progresul se salvează automat.',
+      ctaTitle:'Pregătit să <em>regândești</em> istoria?',ctaDesc:'Alătură-te beta-ului. Fii printre primii care experimentează istoria ca un joc de strategie, nu un manual.',
+      ctaPlaceholder:'Introdu adresa de email',ctaSubmit:'Alătură-te Beta Gratuit',ctaNote:'Gratuit în perioada beta. Nu este necesar card de credit.',
+      footerCopy:'© 2026 CHRONOLOOP — Proiect "ISTORIE ŞI SOCIETATE ÎN DIMENSIUNE VIRTUALĂ"',footerCredit:'Realizat de Lupu George Cristian de la Colegiul Național de Informatică Tudor Vianu',footerAbout:'Despre',footerContact:'Contact',footerPrivacy:'Confidențialitate',
+      modalCreateTitle:'Creează-ți contul',modalCreateSub:'Începe călătoria ta prin cauză și consecință.',
+      modalLoginTitle:'Bine ai revenit',modalLoginSub:'Continuă de unde ai rămas.',
+      modalName:'Nume Afișat',modalEmail:'Email',modalPassword:'Parolă',
+      modalNamePlaceholder:'ex. PasionatIstorie42',modalEmailPlaceholder:'tu@exemplu.com',modalPassPlaceholder:'Min. 8 caractere',
+      modalCreateBtn:'Creează Cont',modalLoginBtn:'Conectare',
+      modalHasAccount:'Ai deja un cont?',modalNewHere:'Ești nou?',modalLoginLink:'Conectare',modalCreateLink:'Creează un cont',
+      modalFillFields:'Te rugăm completează toate câmpurile.',modalEnterName:'Te rugăm introdu un nume afișat.',
+      modalLoggingIn:'Se conectează...',modalCreating:'Se creează contul...',modalWelcome:'Bine ai venit, ',
+      modalServerError:'Nu s-a putut conecta la server. Asigură-te că backend-ul rulează.'
+    }
+  };
+  function st(key){return (sT[splineLang]||sT.en)[key]||sT.en[key]||key;}
+
+  function applySplineTranslations(){
+    var el;
+    if(el=document.getElementById('navHome'))el.textContent=st('navHome');
+    if(el=document.getElementById('navWorldMap'))el.textContent=st('navWorldMap');
+    if(el=document.getElementById('navArena'))el.textContent=st('navArena');
+    if(el=document.getElementById('navLeaderboard'))el.textContent=st('navLeaderboard');
+    if(el=document.getElementById('navLogin'))el.textContent=st('navLogin');
+    if(el=document.getElementById('navJoinBeta'))el.textContent=st('navJoinBeta');
+    if(el=document.getElementById('heroBadgeText'))el.textContent=st('heroBadge');
+    if(el=document.getElementById('heroTitle'))el.innerHTML=st('heroTitle');
+    if(el=document.getElementById('heroSubtitle'))el.textContent=st('heroSubtitle');
+    if(el=document.getElementById('heroStartBtn')){el.innerHTML=st('heroStart')+' <svg viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
+    if(el=document.getElementById('heroHowText'))el.textContent=st('heroHow');
+    if(el=document.getElementById('statScenarios'))el.textContent=st('statScenarios');
+    if(el=document.getElementById('statLinks'))el.textContent=st('statLinks');
+    if(el=document.getElementById('statMissions'))el.textContent=st('statMissions');
+    if(el=document.getElementById('statTesters'))el.textContent=st('statTesters');
+    if(el=document.getElementById('missionEyebrow'))el.textContent=st('missionEyebrow');
+    if(el=document.getElementById('missionTitle'))el.innerHTML=st('missionTitle');
+    if(el=document.getElementById('missionDesc'))el.textContent=st('missionDesc');
+    if(el=document.getElementById('pillar1Title'))el.textContent=st('pillar1Title');
+    if(el=document.getElementById('pillar1Desc'))el.textContent=st('pillar1Desc');
+    if(el=document.getElementById('pillar2Title'))el.textContent=st('pillar2Title');
+    if(el=document.getElementById('pillar2Desc'))el.textContent=st('pillar2Desc');
+    if(el=document.getElementById('pillar3Title'))el.textContent=st('pillar3Title');
+    if(el=document.getElementById('pillar3Desc'))el.textContent=st('pillar3Desc');
+    if(el=document.getElementById('howEyebrow'))el.textContent=st('howEyebrow');
+    if(el=document.getElementById('howTitle'))el.innerHTML=st('howTitle');
+    if(el=document.getElementById('howDesc'))el.textContent=st('howDesc');
+    if(el=document.getElementById('how1Title'))el.textContent=st('how1Title');
+    if(el=document.getElementById('how1Desc'))el.textContent=st('how1Desc');
+    if(el=document.getElementById('how2Title'))el.textContent=st('how2Title');
+    if(el=document.getElementById('how2Desc'))el.textContent=st('how2Desc');
+    if(el=document.getElementById('how3Title'))el.textContent=st('how3Title');
+    if(el=document.getElementById('how3Desc'))el.textContent=st('how3Desc');
+    if(el=document.getElementById('erasEyebrow'))el.textContent=st('erasEyebrow');
+    if(el=document.getElementById('erasTitle'))el.innerHTML=st('erasTitle');
+    if(el=document.getElementById('erasDesc'))el.textContent=st('erasDesc');
+    if(el=document.getElementById('eraRomanName'))el.textContent=st('eraRoman');
+    if(el=document.getElementById('eraMedievalName'))el.textContent=st('eraMedieval');
+    if(el=document.getElementById('eraWw2Name'))el.textContent=st('eraWw2');
+    if(el=document.getElementById('eraColdwarName'))el.textContent=st('eraColdwar');
+    if(el=document.getElementById('eraRomanTag'))el.textContent=st('eraRomanTag');
+    if(el=document.getElementById('eraMedievalTag'))el.textContent=st('eraMedievalTag');
+    if(el=document.getElementById('eraWw2Tag'))el.textContent=st('eraWw2Tag');
+    if(el=document.getElementById('eraColdwarTag'))el.textContent=st('eraColdwarTag');
+    if(el=document.getElementById('featuresEyebrow'))el.textContent=st('featEyebrow');
+    if(el=document.getElementById('featuresTitle'))el.innerHTML=st('featTitle');
+    if(el=document.getElementById('feat1Title'))el.textContent=st('feat1Title');
+    if(el=document.getElementById('feat1Desc'))el.textContent=st('feat1Desc');
+    if(el=document.getElementById('feat2Title'))el.textContent=st('feat2Title');
+    if(el=document.getElementById('feat2Desc'))el.textContent=st('feat2Desc');
+    if(el=document.getElementById('feat3Title'))el.textContent=st('feat3Title');
+    if(el=document.getElementById('feat3Desc'))el.textContent=st('feat3Desc');
+    if(el=document.getElementById('feat4Title'))el.textContent=st('feat4Title');
+    if(el=document.getElementById('feat4Desc'))el.textContent=st('feat4Desc');
+    if(el=document.getElementById('ctaTitle'))el.innerHTML=st('ctaTitle');
+    if(el=document.getElementById('ctaDesc'))el.textContent=st('ctaDesc');
+    if(el=document.getElementById('ctaEmail'))el.placeholder=st('ctaPlaceholder');
+    if(el=document.getElementById('ctaSubmitBtn'))el.textContent=st('ctaSubmit');
+    if(el=document.getElementById('ctaNote'))el.textContent=st('ctaNote');
+    if(el=document.getElementById('footerCopy'))el.innerHTML=st('footerCopy');
+    if(el=document.getElementById('footerCredit'))el.textContent=st('footerCredit');
+    if(el=document.getElementById('footerAbout'))el.textContent=st('footerAbout');
+    if(el=document.getElementById('footerContact'))el.textContent=st('footerContact');
+    if(el=document.getElementById('footerPrivacy'))el.textContent=st('footerPrivacy');
+    if(el=document.getElementById('logoutLabel'))el.textContent=st('logout');
+    // Re-render era detail panel if open
+    if(activeEra){ var tmpEra=activeEra; activeEra=null; toggleEra(tmpEra); }
+    // Re-render modal if open
+    if(document.getElementById('modalOverlay').classList.contains('active')){ openModal(currentMode); }
+  }
+
+  function applySplineLanguage(lang) {
+    splineLang = lang;
+    localStorage.setItem('cl_lang', lang);
+    const flagEl = document.getElementById('langFlagIconSpline');
+    if (flagEl) flagEl.innerHTML = splineFlagSvgs[lang];
+    const labelEl = document.getElementById('langLabelSpline');
+    if (labelEl) labelEl.textContent = lang.toUpperCase();
+    applySplineTranslations();
+  }
+  window.toggleLanguageSpline = function() {
+    applySplineLanguage(splineLang === 'en' ? 'ro' : 'en');
+  };
+  applySplineLanguage(splineLang);
+
+  // If already logged in, update nav buttons
+  (function checkAuth() {
+    const user = localStorage.getItem('cl_user');
+    if (user) {
+      try {
+        const u = JSON.parse(user);
+        const actions = document.getElementById('navActions');
+        if (actions) {
+          const streak = parseInt(localStorage.getItem('cl_streak') || '0');
+          actions.innerHTML =
+            '<div class="nav-streak" style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;border-radius:6px;' + (streak > 0 ? 'background:rgba(255,140,50,0.08);border:1px solid rgba(255,140,50,0.2);' : 'background:rgba(21,23,32,0.5);border:1px solid var(--border-subtle);opacity:0.5;') + '">' +
+              '<svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;"><path d="M12 2C6.5 6.5 3 10 3 14a9 9 0 0018 0c0-4-3.5-7.5-9-12z" fill="' + (streak > 0 ? '#ff8c32' : '#5e5b54') + '" opacity="0.8"/><path d="M12 9c-2 2-3.5 4-3.5 6a3.5 3.5 0 007 0c0-2-1.5-4-3.5-6z" fill="' + (streak > 0 ? '#ffd700' : '#3a382f') + '"/></svg>' +
+              '<span style="font-family:var(--font-display);font-size:0.8rem;color:' + (streak > 0 ? '#ff8c32' : '#5e5b54') + ';font-weight:700;">' + streak + '</span>' +
+            '</div>' +
+            '<a href="chronoloop_profile.html" class="nav-profile-link" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;cursor:pointer;padding:0.3rem 0.7rem;border-radius:6px;border:1px solid var(--border-subtle);background:rgba(212,168,83,0.04);transition:background 0.2s;">' +
+              '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--gold-primary),var(--gold-dim));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:0.65rem;color:var(--bg-deep);font-weight:700;">' + u.displayName.charAt(0).toUpperCase() + '</div>' +
+              '<span style="color:var(--gold-primary);font-family:var(--font-display);font-size:0.78rem;letter-spacing:0.05em;">' + u.displayName + '</span>' +
+            '</a>' +
+            '<button onclick="localStorage.removeItem(\'cl_token\');localStorage.removeItem(\'cl_user\');location.reload()" style="border:1px solid rgba(196,92,92,0.3);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.6rem;color:var(--accent-rose);cursor:pointer;background:rgba(196,92,92,0.05);font-family:var(--font-body);display:inline-flex;align-items:center;gap:3px;"><svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\' style=\'width:13px;height:13px;vertical-align:middle;\'><path d=\'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4\'/><polyline points=\'16 17 21 12 16 7\'/><line x1=\'21\' y1=\'12\' x2=\'9\' y2=\'12\'/></svg><span id="logoutLabel">' + st('logout') + '</span></button>' +
+            '<button class="btn-ghost" id="langToggleBtnSpline" onclick="toggleLanguageSpline()" style="padding:0.35rem 0.5rem;display:flex;align-items:center;gap:0.3rem;min-width:auto;">' +
+              '<svg id="langFlagIconSpline" viewBox="0 0 640 480" style="width:20px;height:14px;border-radius:2px;flex-shrink:0;"></svg>' +
+              '<span id="langLabelSpline" style="font-size:0.6rem;letter-spacing:0.05em;">EN</span>' +
+            '</button>';
+          // Apply flag icon to the newly created toggle button
+          const flagEl = document.getElementById('langFlagIconSpline');
+          if (flagEl) flagEl.innerHTML = splineFlagSvgs[splineLang];
+          const labelEl = document.getElementById('langLabelSpline');
+          if (labelEl) labelEl.textContent = splineLang.toUpperCase();
+        }
+      } catch(e) {}
+    }
+  })();
+})();
+
+const viewer = document.querySelector('spline-viewer');
+viewer.addEventListener('load', () => {
+  const logo = viewer.shadowRoot.querySelector('#logo');
+  if (logo) logo.style.display = 'none';
+});
+
+const interval = setInterval(() => {
+  const viewer = document.querySelector('spline-viewer');
+  if (viewer && viewer.shadowRoot) {
+    const logo = viewer.shadowRoot.querySelector('#logo');
+    if (logo) {
+      logo.remove();
+      clearInterval(interval);
+    }
+  }
+}, 100); // Checks every 100ms until it finds and kills the logo
+</script>
+</body>
+</html>

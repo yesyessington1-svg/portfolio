@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="demo-api.js"></script>
+<!-- demo backend: re-implements the game API in the browser, no server needed -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHRONOLOOP — Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0a0b0f;
+  --bg-primary: #0f1117;
+  --bg-card: #151720;
+  --bg-card-hover: #1a1d2a;
+  --bg-surface: #1c1f2e;
+  --border-subtle: rgba(255,215,120,0.08);
+  --border-medium: rgba(255,215,120,0.15);
+  --gold-primary: #d4a853;
+  --gold-light: #f0d48a;
+  --gold-dim: #8a7034;
+  --gold-glow: rgba(212,168,83,0.3);
+  --text-primary: #e8e4dc;
+  --text-secondary: #9b978e;
+  --text-muted: #5e5b54;
+  --accent-teal: #4a9e8e;
+  --accent-rose: #c45c5c;
+  --accent-blue: #5b7fb8;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  --font-typewriter: 'Special Elite', 'Courier New', monospace;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scrollbar-width: thin; scrollbar-color: var(--gold-dim) var(--bg-deep); }
+body { font-family: var(--font-body); background: var(--bg-deep); color: var(--text-primary); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
+
+/* NAV (unified) */
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 0 3rem; height: 72px; display: flex; align-items: center; justify-content: space-between; background: rgba(10,11,15,0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-subtle); }
+.nav-logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; cursor: pointer; }
+.nav-logo svg { width: 36px; height: 36px; }
+.nav-logo-text { font-family: var(--font-display); font-size: 1.15rem; font-weight: 500; letter-spacing: 0.2em; color: var(--gold-primary); text-transform: uppercase; }
+.nav-links { display: flex; align-items: center; gap: 0.3rem; }
+.nav-link { font-size: 0.78rem; font-weight: 500; letter-spacing: 0.06em; color: var(--text-secondary); text-decoration: none; padding: 0.5rem 1rem; border-radius: 6px; transition: color 0.25s, background 0.25s; cursor: pointer; }
+.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-link.active { color: var(--gold-primary); }
+.nav-actions { display: flex; align-items: center; gap: 0.75rem; }
+.nav-profile-link:hover { background: rgba(212,168,83,0.08) !important; }
+
+/* PROFILE CONTENT */
+.profile-page { padding-top: 112px; padding-bottom: 4rem; max-width: 900px; margin: 0 auto; padding-left: 2rem; padding-right: 2rem; }
+
+.profile-header {
+  display: flex; align-items: center; gap: 2rem;
+  padding: 2rem; border-radius: 16px;
+  background: linear-gradient(135deg, rgba(21,23,32,0.8), rgba(10,11,15,0.9));
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 2.5rem;
+}
+.profile-avatar-large {
+  width: 90px; height: 90px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-primary), var(--gold-dim));
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 2.2rem; color: var(--bg-deep); font-weight: 700;
+  flex-shrink: 0; box-shadow: 0 0 30px rgba(212,168,83,0.2);
+}
+.profile-details { flex: 1; }
+.profile-display-name { font-family: var(--font-display); font-size: 1.8rem; color: var(--gold-primary); letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+.profile-title-text { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.8rem; }
+.profile-stats { display: flex; gap: 2rem; }
+.profile-stat { text-align: center; }
+.profile-stat-value { font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-primary); }
+.profile-stat-label { font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.15rem; }
+
+.xp-bar-section { margin-bottom: 2.5rem; }
+.xp-bar-track-lg {
+  width: 100%; height: 8px; border-radius: 4px;
+  background: rgba(21,23,32,0.8); border: 1px solid var(--border-subtle);
+  overflow: hidden; margin-top: 0.5rem;
+}
+.xp-bar-fill-lg { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold-primary)); border-radius: 4px; transition: width 0.8s var(--ease-out-expo); }
+.xp-bar-labels { display: flex; justify-content: space-between; margin-top: 0.4rem; font-size: 0.7rem; color: var(--text-muted); }
+
+/* BADGES */
+.badges-section { margin-bottom: 2rem; }
+.section-heading { font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-primary); letter-spacing: 0.06em; margin-bottom: 1.2rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-subtle); }
+.badges-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+}
+.badge-card {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 1.2rem 0.8rem; border-radius: 12px;
+  background: rgba(21,23,32,0.6);
+  border: 1px solid var(--border-subtle);
+  transition: all 0.3s ease; text-align: center;
+}
+.badge-card:hover { border-color: var(--border-medium); background: rgba(21,23,32,0.85); }
+.badge-card.locked { opacity: 0.35; }
+.badge-card.locked:hover { opacity: 0.5; }
+.badge-card.earned { border-color: rgba(212,168,83,0.2); }
+.badge-card.earned .badge-icon { filter: none; }
+.badge-icon {
+  width: 48px; height: 48px; margin-bottom: 0.6rem;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold-primary);
+}
+.badge-card.locked .badge-icon { color: var(--text-muted); }
+.badge-name { font-family: var(--font-display); font-size: 0.82rem; color: var(--text-primary); margin-bottom: 0.2rem; }
+.badge-card.locked .badge-name { color: var(--text-muted); }
+.badge-desc { font-size: 0.62rem; color: var(--text-muted); line-height: 1.4; }
+
+.profile-joined { font-size: 0.7rem; color: var(--text-muted); text-align: center; margin-top: 2rem; }
+
+@media (max-width: 768px) {
+  .nav { padding: 0 1.5rem; }
+  .profile-page { padding-left: 1rem; padding-right: 1rem; }
+  .profile-header { flex-direction: column; text-align: center; }
+  .profile-stats { justify-content: center; }
+  .badges-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV (unified across all pages) -->
+<nav class="nav" id="mainNav">
+  <a class="nav-logo" href="chronoloop_spline.html">
+    <svg viewBox="0 0 36 36" fill="none"><path d="M18 2 L32 10 L32 26 L18 34 L4 26 L4 10 Z" stroke="#d4a853" stroke-width="0.8" fill="none" opacity="0.4"/><path d="M12 10 L24 10 L18 18 L24 26 L12 26 L18 18 Z" stroke="#d4a853" stroke-width="1.2" fill="none" opacity="0.8"/><path d="M18 14 L21 18 L18 22 L15 18 Z" fill="#d4a853" opacity="0.6"/><path d="M10 18 A 8 8 0 0 1 18 10" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/><path d="M26 18 A 8 8 0 0 1 18 26" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/></svg>
+    <span class="nav-logo-text">Chronoloop</span>
+  </a>
+  <div class="nav-links">
+    <a class="nav-link" id="navHome" href="chronoloop_spline.html">Home</a>
+    <a class="nav-link" id="navWorldMap" href="chronoloop_hub.html">World Map</a>
+    <a class="nav-link" id="navArena" href="chronoloop_arena.html">Arena</a>
+    <a class="nav-link" id="navLeaderboard" href="chronoloop_leaderboard.html">Leaderboard</a>
+  </div>
+  <div class="nav-actions" id="navActions"></div>
+</nav>
+
+<div class="profile-page">
+  <!-- Profile Header -->
+  <div class="profile-header">
+    <div class="profile-avatar-large" id="profileAvatarLg"></div>
+    <div class="profile-details">
+      <div class="profile-display-name" id="profileDisplayName">—</div>
+      <div class="profile-title-text" id="profileTitleText">—</div>
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <div class="profile-stat-value" id="statLevel">1</div>
+          <div class="profile-stat-label" id="labelLevel">Level</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-value" id="statXp">0</div>
+          <div class="profile-stat-label" id="labelTotalXp">Total XP</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-value" id="statMissions">0</div>
+          <div class="profile-stat-label" id="labelMissions">Missions</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-value" id="statBadges">0</div>
+          <div class="profile-stat-label" id="labelBadges">Badges</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- XP Progress -->
+  <div class="xp-bar-section">
+    <div class="xp-bar-track-lg"><div class="xp-bar-fill-lg" id="xpBarFill"></div></div>
+    <div class="xp-bar-labels">
+      <span id="xpCurrent">0 XP</span>
+      <span id="xpNext">Next: 100 XP</span>
+    </div>
+  </div>
+
+  <!-- Badges -->
+  <div class="badges-section">
+    <div class="section-heading" id="badgesSectionHeading">Badges & Achievements</div>
+    <div class="badges-grid" id="badgesGrid"></div>
+  </div>
+
+  <div class="profile-joined" id="profileJoined"></div>
+</div>
+
+<script>
+// ═══ TRANSLATIONS ═══
+const profileTranslations = {
+  en: {
+    navHome: 'Home', navWorldMap: 'World Map', navArena: 'Arena', navLeaderboard: 'Leaderboard',
+    logout: 'Logout',
+    labelLevel: 'Level', labelTotalXp: 'Total XP', labelMissions: 'Missions', labelBadges: 'Badges',
+    badgesHeading: 'Badges & Achievements',
+    xpNext: 'Next level:', xpMax: 'MAX LEVEL', xpSuffix: 'XP',
+    joinedPrefix: 'Joined',
+    badges: {
+      first_login: { name: 'Time Initiate', desc: 'Log in for the first time' },
+      first_mission: { name: 'Causal Pioneer', desc: 'Complete your first mission' },
+      five_missions: { name: 'History Buff', desc: 'Complete 5 missions' },
+      ten_missions: { name: 'Decade Scholar', desc: 'Complete 10 missions' },
+      first_skilltree: { name: 'Root & Branch', desc: 'Complete a full skill tree' },
+      country_master: { name: 'National Expert', desc: 'Complete all skill trees for one country' },
+      level_5: { name: 'Time Architect', desc: 'Reach Level 5' },
+      level_10: { name: 'Chrono Sage', desc: 'Reach Level 10' },
+      xp_500: { name: 'Half Millennium', desc: 'Earn 500 total XP' },
+      xp_1000: { name: 'Millennium Mark', desc: 'Earn 1000 total XP' },
+      three_countries: { name: 'Continental', desc: 'Start missions in 3 different countries' },
+      perfect_mission: { name: 'Flawless Logic', desc: 'Get a perfect score on a mission' },
+      theory_reader: { name: 'Deep Thinker', desc: 'Read 5 theory articles' },
+      streak_3: { name: 'Momentum', desc: 'Complete 3 missions in a row without failing' },
+      beta_tester: { name: 'Beta Pioneer', desc: 'Join during the beta period' }
+    },
+    levelTitles: {
+      1: 'Time Cadet', 2: 'Chronicle Scout', 3: 'History Seeker', 4: 'Era Navigator',
+      5: 'Time Architect', 6: 'Causal Strategist', 7: 'Temporal Analyst', 8: 'Epoch Commander',
+      9: 'History Shaper', 10: 'Chrono Sage', 11: 'Fate Weaver', 12: 'Paradox Walker',
+      13: 'Time Lord', 14: 'Eternal Scholar', 15: 'Master of Time'
+    }
+  },
+  ro: {
+    navHome: 'Acasă', navWorldMap: 'Harta Lumii', navArena: 'Arena', navLeaderboard: 'Clasament',
+    logout: 'Deconectare',
+    labelLevel: 'Nivel', labelTotalXp: 'XP Total', labelMissions: 'Misiuni', labelBadges: 'Insigne',
+    badgesHeading: 'Insigne și Realizări',
+    xpNext: 'Nivel următor:', xpMax: 'NIVEL MAXIM', xpSuffix: 'XP',
+    joinedPrefix: 'Membru din',
+    badges: {
+      first_login: { name: 'Inițiat Temporal', desc: 'Conectează-te pentru prima dată' },
+      first_mission: { name: 'Pionier Cauzal', desc: 'Completează prima ta misiune' },
+      five_missions: { name: 'Pasionat de Istorie', desc: 'Completează 5 misiuni' },
+      ten_missions: { name: 'Erudit al Deceniului', desc: 'Completează 10 misiuni' },
+      first_skilltree: { name: 'Rădăcină și Ramură', desc: 'Completează un arbore de abilități' },
+      country_master: { name: 'Expert Național', desc: 'Completează toți arborii pentru o țară' },
+      level_5: { name: 'Arhitect Temporal', desc: 'Atinge Nivelul 5' },
+      level_10: { name: 'Înțelept Crono', desc: 'Atinge Nivelul 10' },
+      xp_500: { name: 'Jumătate de Mileniu', desc: 'Acumulează 500 XP' },
+      xp_1000: { name: 'Marca Mileniului', desc: 'Acumulează 1000 XP' },
+      three_countries: { name: 'Continental', desc: 'Începe misiuni în 3 țări diferite' },
+      perfect_mission: { name: 'Logică Impecabilă', desc: 'Obține scor perfect la o misiune' },
+      theory_reader: { name: 'Gânditor Profund', desc: 'Citește 5 articole de teorie' },
+      streak_3: { name: 'Avânt', desc: 'Completează 3 misiuni la rând fără eșec' },
+      beta_tester: { name: 'Pionier Beta', desc: 'Înscrie-te în perioada beta' }
+    },
+    levelTitles: {
+      1: 'Cadet Temporal', 2: 'Cercetaș al Cronicilor', 3: 'Căutător de Istorie', 4: 'Navigator de Ere',
+      5: 'Arhitect Temporal', 6: 'Strateg Cauzal', 7: 'Analist Temporal', 8: 'Comandant de Epocă',
+      9: 'Modelator de Istorie', 10: 'Înțelept Crono', 11: 'Țesător de Destin', 12: 'Călător al Paradoxurilor',
+      13: 'Stăpânul Timpului', 14: 'Erudit Etern', 15: 'Maestrul Timpului'
+    }
+  }
+};
+function pt(key) { return (profileTranslations[profileLang] || profileTranslations.en)[key] || (profileTranslations.en)[key] || key; }
+function ptBadge(id) { return ((profileTranslations[profileLang] || profileTranslations.en).badges || {})[id] || profileTranslations.en.badges[id] || { name: id, desc: '' }; }
+function ptLevel(lvl) { return ((profileTranslations[profileLang] || profileTranslations.en).levelTitles || {})[lvl] || profileTranslations.en.levelTitles[lvl] || ''; }
+
+// ═══ BADGE DEFINITIONS ═══
+const badges = [
+  {
+    id: 'first_login',
+    name: 'Time Initiate',
+    desc: 'Log in for the first time',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="24" r="18"/><path d="M24 14v10l7 7"/><circle cx="24" cy="24" r="3" fill="currentColor" opacity="0.4"/></svg>`,
+    check: (u) => true
+  },
+  {
+    id: 'first_mission',
+    name: 'Causal Pioneer',
+    desc: 'Complete your first mission',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4l6 12 13 2-9 9 2 13-12-6-12 6 2-13-9-9 13-2z"/></svg>`,
+    check: (u) => (u.missionsCompleted || 0) >= 1
+  },
+  {
+    id: 'five_missions',
+    name: 'History Buff',
+    desc: 'Complete 5 missions',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="8" width="32" height="32" rx="4"/><path d="M16 24l5 5 11-11"/></svg>`,
+    check: (u) => (u.missionsCompleted || 0) >= 5
+  },
+  {
+    id: 'ten_missions',
+    name: 'Decade Scholar',
+    desc: 'Complete 10 missions',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 4h20l8 12-14 28L14 16z"/><circle cx="24" cy="20" r="4" fill="currentColor" opacity="0.3"/></svg>`,
+    check: (u) => (u.missionsCompleted || 0) >= 10
+  },
+  {
+    id: 'first_skilltree',
+    name: 'Root & Branch',
+    desc: 'Complete a full skill tree',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 40V24"/><path d="M24 24l-10-12"/><path d="M24 24l10-12"/><circle cx="14" cy="12" r="4"/><circle cx="34" cy="12" r="4"/><circle cx="24" cy="40" r="4" fill="currentColor" opacity="0.3"/><path d="M24 24V8"/><circle cx="24" cy="8" r="3"/></svg>`,
+    check: (u) => (u.skillTreesCompleted || 0) >= 1
+  },
+  {
+    id: 'country_master',
+    name: 'National Expert',
+    desc: 'Complete all skill trees for one country',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4C14 4 6 16 6 28c0 8 8 16 18 16s18-8 18-16C42 16 34 4 24 4z"/><path d="M18 20h12M16 28h16"/><circle cx="24" cy="14" r="2" fill="currentColor"/></svg>`,
+    check: (u) => (u.countriesMastered || 0) >= 1
+  },
+  {
+    id: 'level_5',
+    name: 'Time Architect',
+    desc: 'Reach Level 5',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 6l4 8h8l-6 6 2 8-8-4-8 4 2-8-6-6h8z"/><circle cx="24" cy="36" r="6"/><path d="M21 36l2 2 4-4"/></svg>`,
+    check: (u) => (u.level || 1) >= 5
+  },
+  {
+    id: 'level_10',
+    name: 'Chrono Sage',
+    desc: 'Reach Level 10',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="24" r="16"/><circle cx="24" cy="24" r="10"/><circle cx="24" cy="24" r="4" fill="currentColor" opacity="0.3"/><path d="M24 8v4M24 36v4M8 24h4M36 24h4"/></svg>`,
+    check: (u) => (u.level || 1) >= 10
+  },
+  {
+    id: 'xp_500',
+    name: 'Half Millennium',
+    desc: 'Earn 500 total XP',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 38V20l12-12 12 12v18"/><path d="M20 38v-10h8v10"/><path d="M8 22l16-16 16 16"/></svg>`,
+    check: (u) => (u.xp || 0) >= 500
+  },
+  {
+    id: 'xp_1000',
+    name: 'Millennium Mark',
+    desc: 'Earn 1000 total XP',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4v12"/><path d="M16 8l8 8 8-8"/><rect x="10" y="20" width="28" height="20" rx="3"/><path d="M18 28h12M18 34h8"/></svg>`,
+    check: (u) => (u.xp || 0) >= 1000
+  },
+  {
+    id: 'three_countries',
+    name: 'Continental',
+    desc: 'Start missions in 3 different countries',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="24" cy="24" r="18"/><ellipse cx="24" cy="24" rx="10" ry="18"/><path d="M6 24h36M8 16h32M8 32h32"/></svg>`,
+    check: (u) => (u.countriesVisited || 0) >= 3
+  },
+  {
+    id: 'perfect_mission',
+    name: 'Flawless Logic',
+    desc: 'Get a perfect score on a mission',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M24 4l2 8h8l-6 5 2 8-6-4-6 4 2-8-6-5h8z"/><path d="M12 32h24M16 38h16"/></svg>`,
+    check: (u) => (u.perfectMissions || 0) >= 1
+  },
+  {
+    id: 'theory_reader',
+    name: 'Deep Thinker',
+    desc: 'Read 5 theory articles',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8h16v32H6z"/><path d="M22 8h20l-4 32H22z"/><path d="M10 16h8M10 22h8M10 28h6M26 16h10M26 22h10M26 28h8"/></svg>`,
+    check: (u) => (u.theoryRead || 0) >= 5
+  },
+  {
+    id: 'streak_3',
+    name: 'Momentum',
+    desc: 'Complete 3 missions in a row without failing',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 4l4 16 8-6-4 16 8-6-4 16-16 4 4-16-8 6 4-16-8 6 4-16z"/></svg>`,
+    check: (u) => (u.bestStreak || 0) >= 3
+  },
+  {
+    id: 'beta_tester',
+    name: 'Beta Pioneer',
+    desc: 'Join during the beta period',
+    icon: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 8h16l4 8-12 28L12 16z"/><path d="M16 16h16"/><circle cx="24" cy="24" r="3" fill="currentColor" opacity="0.4"/><path d="M20 8l4-4 4 4"/></svg>`,
+    check: (u) => true
+  }
+];
+
+// ═══ LEVEL SYSTEM (mirror of server) ═══
+const levelThresholds = [
+  { level: 1, xpNeeded: 0, title: 'Time Cadet' },
+  { level: 2, xpNeeded: 100, title: 'Chronicle Scout' },
+  { level: 3, xpNeeded: 250, title: 'History Seeker' },
+  { level: 4, xpNeeded: 450, title: 'Era Navigator' },
+  { level: 5, xpNeeded: 700, title: 'Time Architect' },
+  { level: 6, xpNeeded: 1000, title: 'Causal Strategist' },
+  { level: 7, xpNeeded: 1400, title: 'Temporal Analyst' },
+  { level: 8, xpNeeded: 1900, title: 'Epoch Commander' },
+  { level: 9, xpNeeded: 2500, title: 'History Shaper' },
+  { level: 10, xpNeeded: 3200, title: 'Chrono Sage' },
+  { level: 11, xpNeeded: 4000, title: 'Fate Weaver' },
+  { level: 12, xpNeeded: 5000, title: 'Paradox Walker' },
+  { level: 13, xpNeeded: 6200, title: 'Time Lord' },
+  { level: 14, xpNeeded: 7600, title: 'Eternal Scholar' },
+  { level: 15, xpNeeded: 9999, title: 'Master of Time' }
+];
+
+function getLevelFromXp(xp) {
+  let result = levelThresholds[0];
+  for (const t of levelThresholds) {
+    if (xp >= t.xpNeeded) result = t;
+    else break;
+  }
+  return result;
+}
+
+function getXpProgress(xp) {
+  const lvl = getLevelFromXp(xp);
+  const idx = levelThresholds.indexOf(lvl);
+  const next = levelThresholds[idx + 1];
+  if (!next) return { pct: 100, next: null };
+  const range = next.xpNeeded - lvl.xpNeeded;
+  const progress = xp - lvl.xpNeeded;
+  return { pct: Math.round((progress / range) * 100), next };
+}
+
+// ═══ INIT ═══
+document.addEventListener('DOMContentLoaded', () => {
+  const token = localStorage.getItem('cl_token');
+  const userStr = localStorage.getItem('cl_user');
+
+  if (!token || !userStr) {
+    window.location.href = 'chronoloop_spline.html';
+    return;
+  }
+
+  let user;
+  try { user = JSON.parse(userStr); } catch(e) {
+    window.location.href = 'chronoloop_spline.html';
+    return;
+  }
+
+  // Populate nav
+  const streak = parseInt(localStorage.getItem('cl_streak') || '0');
+  const actions = document.getElementById('navActions');
+  actions.innerHTML =
+    '<div style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;border-radius:6px;' + (streak > 0 ? 'background:rgba(255,140,50,0.08);border:1px solid rgba(255,140,50,0.2);' : 'background:rgba(21,23,32,0.5);border:1px solid var(--border-subtle);opacity:0.5;') + '">' +
+      '<svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;"><path d="M12 2C6.5 6.5 3 10 3 14a9 9 0 0018 0c0-4-3.5-7.5-9-12z" fill="' + (streak > 0 ? '#ff8c32' : '#5e5b54') + '" opacity="0.8"/><path d="M12 9c-2 2-3.5 4-3.5 6a3.5 3.5 0 007 0c0-2-1.5-4-3.5-6z" fill="' + (streak > 0 ? '#ffd700' : '#3a382f') + '"/></svg>' +
+      '<span style="font-family:var(--font-display);font-size:0.8rem;color:' + (streak > 0 ? '#ff8c32' : '#5e5b54') + ';font-weight:700;">' + streak + '</span>' +
+    '</div>' +
+    '<a href="chronoloop_profile.html" class="nav-profile-link" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;cursor:pointer;padding:0.3rem 0.7rem;border-radius:6px;border:1px solid var(--gold-dim);background:rgba(212,168,83,0.08);transition:background 0.2s;">' +
+      '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--gold-primary),var(--gold-dim));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:0.65rem;color:var(--bg-deep);font-weight:700;">' + user.displayName.charAt(0).toUpperCase() + '</div>' +
+      '<span style="color:var(--gold-primary);font-family:var(--font-display);font-size:0.78rem;letter-spacing:0.05em;">' + user.displayName + '</span>' +
+    '</a>' +
+    '<button onclick="localStorage.removeItem(\'cl_token\');localStorage.removeItem(\'cl_user\');window.location.href=\'chronoloop_spline.html\'" style="border:1px solid rgba(196,92,92,0.3);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.6rem;color:var(--accent-rose);cursor:pointer;background:rgba(196,92,92,0.05);font-family:var(--font-body);display:inline-flex;align-items:center;gap:3px;"><svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\' style=\'width:13px;height:13px;\'><path d=\'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4\'/><polyline points=\'16 17 21 12 16 7\'/><line x1=\'21\' y1=\'12\' x2=\'9\' y2=\'12\'/></svg>Logout</button>' +
+    '<button id="langToggleBtnProfile" onclick="toggleLanguageProfile()" style="border:1px solid var(--border-subtle);border-radius:6px;padding:0.3rem 0.5rem;font-size:0.7rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;background:rgba(10,11,15,0.5);">' +
+      '<svg id="langFlagIconProfile" viewBox="0 0 640 480" style="width:20px;height:14px;border-radius:2px;flex-shrink:0;"></svg>' +
+      '<span id="langLabelProfile" style="font-size:0.55rem;letter-spacing:0.05em;color:var(--text-secondary);">EN</span>' +
+    '</button>';
+
+  // Populate profile
+  document.getElementById('profileAvatarLg').textContent = user.displayName.charAt(0).toUpperCase();
+  document.getElementById('profileDisplayName').textContent = user.displayName;
+
+  const lvl = getLevelFromXp(user.xp || 0);
+  const progress = getXpProgress(user.xp || 0);
+
+  document.getElementById('profileTitleText').textContent = lvl.title + ' — Level ' + lvl.level;
+  document.getElementById('statLevel').textContent = lvl.level;
+  document.getElementById('statXp').textContent = (user.xp || 0);
+  document.getElementById('statMissions').textContent = user.missionsCompleted || 0;
+
+  // XP bar
+  document.getElementById('xpBarFill').style.width = progress.pct + '%';
+  document.getElementById('xpCurrent').textContent = (user.xp || 0) + ' XP';
+  document.getElementById('xpNext').textContent = progress.next ? ('Next level: ' + progress.next.xpNeeded + ' XP') : 'MAX LEVEL';
+
+  // Render badges
+  const grid = document.getElementById('badgesGrid');
+  let earnedCount = 0;
+  badges.forEach(b => {
+    const earned = b.check(user);
+    if (earned) earnedCount++;
+    const card = document.createElement('div');
+    card.className = 'badge-card ' + (earned ? 'earned' : 'locked');
+    card.innerHTML =
+      '<div class="badge-icon">' + b.icon + '</div>' +
+      '<div class="badge-name">' + b.name + '</div>' +
+      '<div class="badge-desc">' + b.desc + '</div>';
+    grid.appendChild(card);
+  });
+
+  document.getElementById('statBadges').textContent = earnedCount;
+
+  // Joined date
+  if (user.createdAt) {
+    const d = new Date(user.createdAt);
+    document.getElementById('profileJoined').textContent = 'Joined ' + d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  // Refresh from server
+  fetch(window.location.origin + '/api/me', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  }).then(r => r.json()).then(data => {
+    if (data.id) localStorage.setItem('cl_user', JSON.stringify(data));
+  }).catch(() => {});
+
+  // Init language toggle
+  initProfileLang();
+});
+
+// ═══ LANGUAGE TOGGLE ═══
+const profileFlagSvgs = {
+  en: '<rect width="640" height="480" fill="#012169"/><path d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z" fill="#fff"/><path d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z" fill="#C8102E"/><path d="M241 0v480h160V0zM0 160v160h640V160z" fill="#fff"/><path d="M0 193v96h640v-96zM273 0v480h96V0z" fill="#C8102E"/>',
+  ro: '<rect width="640" height="480" fill="#FCD116"/><rect width="213.3" height="480" fill="#002B7F"/><rect x="426.7" width="213.3" height="480" fill="#CE1126"/>'
+};
+let profileLang = localStorage.getItem('cl_lang') || 'en';
+
+function initProfileLang() {
+  const flagEl = document.getElementById('langFlagIconProfile');
+  const labelEl = document.getElementById('langLabelProfile');
+  if (flagEl) flagEl.innerHTML = profileFlagSvgs[profileLang] || profileFlagSvgs.en;
+  if (labelEl) labelEl.textContent = profileLang.toUpperCase();
+  applyProfileTranslations();
+}
+
+function applyProfileTranslations() {
+  // Nav links
+  var el;
+  if (el = document.getElementById('navHome')) el.textContent = pt('navHome');
+  if (el = document.getElementById('navWorldMap')) el.textContent = pt('navWorldMap');
+  if (el = document.getElementById('navArena')) el.textContent = pt('navArena');
+  if (el = document.getElementById('navLeaderboard')) el.textContent = pt('navLeaderboard');
+  // Stat labels
+  if (el = document.getElementById('labelLevel')) el.textContent = pt('labelLevel');
+  if (el = document.getElementById('labelTotalXp')) el.textContent = pt('labelTotalXp');
+  if (el = document.getElementById('labelMissions')) el.textContent = pt('labelMissions');
+  if (el = document.getElementById('labelBadges')) el.textContent = pt('labelBadges');
+  // Badges heading
+  if (el = document.getElementById('badgesSectionHeading')) el.textContent = pt('badgesHeading');
+  // XP bar labels
+  var userStr = localStorage.getItem('cl_user');
+  if (userStr) {
+    try {
+      var user = JSON.parse(userStr);
+      var xp = user.xp || 0;
+      var progress = getXpProgress(xp);
+      if (el = document.getElementById('xpCurrent')) el.textContent = xp + ' ' + pt('xpSuffix');
+      if (el = document.getElementById('xpNext')) el.textContent = progress.next ? (pt('xpNext') + ' ' + progress.next.xpNeeded + ' ' + pt('xpSuffix')) : pt('xpMax');
+      // Level title
+      var lvl = getLevelFromXp(xp);
+      var translatedTitle = ptLevel(lvl.level);
+      if (el = document.getElementById('profileTitleText')) el.textContent = translatedTitle + ' — ' + pt('labelLevel') + ' ' + lvl.level;
+    } catch(e) {}
+  }
+  // Re-render badges with translated names
+  var grid = document.getElementById('badgesGrid');
+  if (grid) {
+    var earnedCount = 0;
+    grid.innerHTML = '';
+    var userObj;
+    try { userObj = JSON.parse(localStorage.getItem('cl_user') || '{}'); } catch(e) { userObj = {}; }
+    badges.forEach(function(b) {
+      var earned = b.check(userObj);
+      if (earned) earnedCount++;
+      var tr = ptBadge(b.id);
+      var card = document.createElement('div');
+      card.className = 'badge-card ' + (earned ? 'earned' : 'locked');
+      card.innerHTML =
+        '<div class="badge-icon">' + b.icon + '</div>' +
+        '<div class="badge-name">' + tr.name + '</div>' +
+        '<div class="badge-desc">' + tr.desc + '</div>';
+      grid.appendChild(card);
+    });
+    if (el = document.getElementById('statBadges')) el.textContent = earnedCount;
+  }
+  // Joined text
+  if (userStr) {
+    try {
+      var u2 = JSON.parse(userStr);
+      if (u2.createdAt) {
+        var d = new Date(u2.createdAt);
+        var locale = profileLang === 'ro' ? 'ro-RO' : 'en-US';
+        if (el = document.getElementById('profileJoined')) el.textContent = pt('joinedPrefix') + ' ' + d.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+      }
+    } catch(e) {}
+  }
+}
+
+function toggleLanguageProfile() {
+  profileLang = profileLang === 'en' ? 'ro' : 'en';
+  localStorage.setItem('cl_lang', profileLang);
+  initProfileLang();
+}
+</script>
+</body>
+</html>

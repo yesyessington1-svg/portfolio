@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="demo-api.js"></script>
+<!-- demo backend: re-implements the game API in the browser, no server needed -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronoloop - Leaderboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0a0b0f;
+  --bg-primary: #0f1117;
+  --bg-card: #151720;
+  --bg-card-hover: #1a1d2a;
+  --bg-surface: #1c1f2e;
+  --border-subtle: rgba(255,215,120,0.08);
+  --border-medium: rgba(255,215,120,0.15);
+  --gold-primary: #d4a853;
+  --gold-light: #f0d48a;
+  --gold-dim: #8a7034;
+  --gold-glow: rgba(212,168,83,0.3);
+  --text-primary: #e8e4dc;
+  --text-secondary: #9b978e;
+  --text-muted: #5e5b54;
+  --accent-teal: #4a9e8e;
+  --accent-rose: #c45c5c;
+  --accent-blue: #5b7fb8;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  --font-typewriter: 'Special Elite', 'Courier New', monospace;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--gold-dim) var(--bg-deep); }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Film grain overlay */
+.film-grain {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Nav (matches spline/hub pages) */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  padding: 0 3rem;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(10,11,15,0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.3s;
+}
+
+.nav.scrolled { background: rgba(10,11,15,0.92); }
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-logo svg { width: 36px; height: 36px; }
+
+.nav-logo-text {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--gold-primary);
+  text-transform: uppercase;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.nav-link {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: color 0.25s, background 0.25s;
+  cursor: pointer;
+  font-family: var(--font-body);
+  background: none;
+  border: none;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.04);
+}
+
+.nav-link.active {
+  color: var(--gold-primary);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Main content */
+.page-content {
+  padding-top: 72px;
+  min-height: 100vh;
+}
+
+.leaderboard-container {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 6rem;
+}
+
+/* Weekly Champion Banner */
+.champion-banner {
+  background: linear-gradient(135deg, rgba(212,168,83,0.08) 0%, rgba(212,168,83,0.03) 100%);
+  border: 1px solid rgba(212,168,83,0.18);
+  border-radius: 16px;
+  padding: 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideIn 0.7s var(--ease-out-expo) 0.1s forwards;
+}
+
+.champion-banner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(212,168,83,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.champion-crown {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--gold-primary), var(--gold-dim));
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(212,168,83,0.2);
+}
+
+.champion-crown svg { width: 30px; height: 30px; }
+
+.champion-info { flex: 1; }
+
+.champion-label {
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 0.3rem;
+}
+
+.champion-name {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--gold-light);
+  margin-bottom: 0.15rem;
+}
+
+.champion-stat {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.champion-trophy {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.champion-trophy-label {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  color: var(--gold-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 0.3rem;
+}
+
+.champion-wins {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gold-primary);
+}
+
+/* Tab Toggle */
+.tab-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--bg-card);
+  border-radius: 10px;
+  padding: 0.25rem;
+  border: 1px solid var(--border-subtle);
+  width: fit-content;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideIn 0.7s var(--ease-out-expo) 0.2s forwards;
+}
+
+.tab-btn {
+  padding: 0.55rem 1.4rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.03);
+}
+
+.tab-btn.active {
+  color: var(--gold-primary);
+  background: rgba(212,168,83,0.1);
+  border: 1px solid rgba(212,168,83,0.15);
+}
+
+.tab-btn svg { width: 14px; height: 14px; }
+
+/* School Code Input */
+.school-input-wrap {
+  display: none;
+  margin-bottom: 1.5rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.school-input-wrap.visible {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.school-input-wrap input {
+  flex: 1;
+  max-width: 320px;
+  padding: 0.65rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color 0.25s ease;
+}
+
+.school-input-wrap input::placeholder {
+  color: var(--text-muted);
+}
+
+.school-input-wrap input:focus {
+  border-color: var(--gold-primary);
+  box-shadow: 0 0 0 3px rgba(212,168,83,0.08);
+}
+
+.school-input-wrap button {
+  margin-left: 0.5rem;
+  padding: 0.65rem 1.2rem;
+  background: rgba(212,168,83,0.1);
+  border: 1px solid rgba(212,168,83,0.2);
+  border-radius: 8px;
+  color: var(--gold-primary);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.03em;
+}
+
+.school-input-wrap button:hover {
+  background: rgba(212,168,83,0.15);
+}
+
+/* Leaderboard Table */
+.lb-section {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideIn 0.7s var(--ease-out-expo) 0.3s forwards;
+}
+
+.lb-header {
+  display: grid;
+  grid-template-columns: 60px 1fr 160px 80px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0.3rem;
+}
+
+.lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lb-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 160px 80px;
+  align-items: center;
+  padding: 0.75rem 1.2rem;
+  border-radius: 10px;
+  transition: all 0.25s ease;
+  cursor: default;
+  opacity: 0;
+  transform: translateX(-20px);
+  position: relative;
+}
+
+.lb-row:nth-child(odd) {
+  background: rgba(21,23,32,0.4);
+}
+
+.lb-row:nth-child(even) {
+  background: rgba(26,29,42,0.3);
+}
+
+.lb-row:hover {
+  background: var(--bg-card-hover);
+  transform: translateX(0) scale(1.005);
+}
+
+.lb-row.current-user {
+  border: 1px solid rgba(212,168,83,0.2);
+  box-shadow: 0 0 20px rgba(212,168,83,0.06), inset 0 0 20px rgba(212,168,83,0.02);
+  background: rgba(212,168,83,0.04);
+}
+
+.lb-row.rank-1 .lb-rank-num { color: #d4a853; font-weight: 700; }
+.lb-row.rank-2 .lb-rank-num { color: #c0c0c0; font-weight: 700; }
+.lb-row.rank-3 .lb-rank-num { color: #cd7f32; font-weight: 700; }
+
+.lb-rank {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lb-rank-icon { width: 22px; height: 22px; flex-shrink: 0; }
+
+.lb-rank-num {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.lb-user {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.lb-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--bg-deep);
+  flex-shrink: 0;
+}
+
+.lb-avatar.rank-1-av { background: linear-gradient(135deg, #d4a853, #f0d48a); }
+.lb-avatar.rank-2-av { background: linear-gradient(135deg, #a0a0a0, #d0d0d0); }
+.lb-avatar.rank-3-av { background: linear-gradient(135deg, #cd7f32, #e8a95b); }
+.lb-avatar.rank-default { background: linear-gradient(135deg, var(--gold-dim), var(--gold-primary)); }
+
+.lb-user-info { min-width: 0; }
+
+.lb-username {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lb-title {
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.lb-badges {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.era-badge {
+  width: 22px;
+  height: 22px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.era-badge:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.lb-level {
+  text-align: right;
+}
+
+.lb-level-num {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gold-primary);
+}
+
+.lb-level-label {
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.empty-state svg { width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.3; }
+
+.empty-state-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.empty-state-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Loading Skeleton */
+.lb-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skeleton-row {
+  height: 52px;
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  border-radius: 10px;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes fadeSlideIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rowSlideIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Profile Card */
+.ui-layer { position: fixed; z-index: 10; pointer-events: none; }
+.ui-layer > * { pointer-events: auto; }
+.ui-bottom-left { bottom: 1.8rem; left: 2rem; }
+.profile-card { background: rgba(10,11,15,0.8); backdrop-filter: blur(20px); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 0.9rem 1.1rem; display: flex; align-items: center; gap: 0.8rem; min-width: 240px; }
+.profile-avatar { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--gold-dim), var(--gold-primary)); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; color: var(--bg-deep); flex-shrink: 0; }
+.profile-info { flex: 1; min-width: 0; }
+.profile-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.1rem; }
+.profile-title { font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-dim); margin-bottom: 0.4rem; }
+.xp-bar-track { width: 100%; height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+.xp-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold-dim), var(--gold-primary)); border-radius: 2px; }
+.xp-label { display: flex; justify-content: space-between; margin-top: 0.15rem; font-size: 0.5rem; color: var(--text-muted); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .nav { padding: 0 1.5rem; }
+  .nav-links { display: none; }
+  .leaderboard-container { padding: 1.5rem 1rem 6rem; }
+  .champion-banner { padding: 1rem 1.2rem; flex-wrap: wrap; }
+  .lb-header { grid-template-columns: 45px 1fr 100px 60px; padding: 0.5rem 0.8rem; font-size: 0.5rem; }
+  .lb-row { grid-template-columns: 45px 1fr 100px 60px; padding: 0.6rem 0.8rem; }
+  .lb-badges { gap: 0.2rem; }
+  .era-badge { width: 18px; height: 18px; }
+  .ui-bottom-left { bottom: 1rem; left: 1rem; }
+  .profile-card { min-width: 200px; padding: 0.7rem 0.9rem; }
+}
+
+@media (max-width: 480px) {
+  .lb-header { grid-template-columns: 40px 1fr 60px; }
+  .lb-row { grid-template-columns: 40px 1fr 60px; }
+  .lb-header .lb-h-badges, .lb-badges { display: none; }
+  .champion-trophy { display: none; }
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+</style>
+</head>
+<body>
+
+<div class="film-grain"></div>
+
+<nav class="nav" id="mainNav">
+  <a class="nav-logo" href="chronoloop_spline.html">
+    <svg viewBox="0 0 36 36" fill="none"><path d="M18 2 L32 10 L32 26 L18 34 L4 26 L4 10 Z" stroke="#d4a853" stroke-width="0.8" fill="none" opacity="0.4"/><path d="M12 10 L24 10 L18 18 L24 26 L12 26 L18 18 Z" stroke="#d4a853" stroke-width="1.2" fill="none" opacity="0.8"/><path d="M18 14 L21 18 L18 22 L15 18 Z" fill="#d4a853" opacity="0.6"/><path d="M10 18 A 8 8 0 0 1 18 10" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/><path d="M26 18 A 8 8 0 0 1 18 26" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/></svg>
+    <span class="nav-logo-text">Chronoloop</span>
+  </a>
+  <div class="nav-links" id="navLinks">
+    <a class="nav-link" id="navHome" href="chronoloop_spline.html">Home</a>
+    <a class="nav-link" id="navWorldMap" href="chronoloop_hub.html">World Map</a>
+    <a class="nav-link" id="navArena" href="chronoloop_arena.html">Arena</a>
+    <a class="nav-link active" id="navLeaderboard" href="chronoloop_leaderboard.html">Leaderboard</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-actions" id="navActions"></div>
+
+    <button class="nav-link" id="langToggleBtnLb"
+      onclick="toggleLanguageLb()"
+      style="border:1px solid var(--border-subtle);border-radius:6px;padding:0.3rem 0.5rem;font-size:0.7rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;background:rgba(10,11,15,0.5);">
+      <svg id="langFlagIconLb" viewBox="0 0 640 480" style="width:20px;height:14px;border-radius:2px;flex-shrink:0;"></svg>
+      <span id="langLabelLb" style="font-size:0.55rem;letter-spacing:0.05em;color:var(--text-secondary);">EN</span>
+    </button>
+  </div>
+</nav>
+
+<div class="page-content">
+  <div class="leaderboard-container">
+
+    <!-- Weekly Champion Banner -->
+    <div class="champion-banner" id="championBanner">
+      <div class="champion-crown">
+        <svg viewBox="0 0 30 30" fill="none">
+          <path d="M15 4L19 10L26 8L23 18H7L4 8L11 10L15 4Z" fill="#0a0b0f" stroke="#0a0b0f" stroke-width="1.5"/>
+          <path d="M15 4L19 10L26 8L23 18H7L4 8L11 10L15 4Z" fill="none" stroke="#0a0b0f" stroke-width="0.5"/>
+          <path d="M7 18H23V21C23 21.5 22.5 22 22 22H8C7.5 22 7 21.5 7 21V18Z" fill="#0a0b0f"/>
+          <circle cx="15" cy="12" r="2" fill="#0a0b0f" opacity="0.6"/>
+          <circle cx="8" cy="10" r="1.2" fill="#0a0b0f" opacity="0.4"/>
+          <circle cx="22" cy="10" r="1.2" fill="#0a0b0f" opacity="0.4"/>
+        </svg>
+      </div>
+      <div class="champion-info">
+        <div class="champion-label" id="championLabel">This Week's Debate Champion</div>
+        <div class="champion-name" id="championName">---</div>
+        <div class="champion-stat" id="championStat">Most Arena wins this week</div>
+      </div>
+      <div class="champion-trophy">
+        <div class="champion-wins" id="championWins">--</div>
+        <div class="champion-trophy-label" id="championTrophyLabel">Wins</div>
+      </div>
+    </div>
+
+    <!-- Tab Toggle -->
+    <div class="tab-toggle">
+      <button class="tab-btn active" data-tab="global" id="tabGlobal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        Global
+      </button>
+      <button class="tab-btn" data-tab="school" id="tabSchool">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 10l10-6 10 6-10 6-10-6z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>
+        School
+      </button>
+    </div>
+
+    <!-- School Code Input -->
+    <div class="school-input-wrap" id="schoolInputWrap">
+      <input type="text" id="schoolCodeInput" placeholder="Enter your school code (e.g. HIST-2026-A)" maxlength="20" />
+      <button id="schoolSearchBtn">Search</button>
+    </div>
+
+    <!-- Leaderboard Section -->
+    <div class="lb-section" id="lbSection">
+      <div class="lb-header">
+        <span id="lbHeaderRank">Rank</span>
+        <span id="lbHeaderPlayer">Player</span>
+        <span class="lb-h-badges" id="lbHeaderBadges">Era Mastery</span>
+        <span style="text-align:right;" id="lbHeaderLevel">Level</span>
+      </div>
+      <div class="lb-list" id="lbList">
+        <div class="lb-skeleton" id="lbSkeleton">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Bottom-Left Profile Card -->
+<div class="ui-layer ui-bottom-left" id="profileOverlay">
+  <div class="profile-card">
+    <div class="profile-avatar" id="profileAvatar">?</div>
+    <div class="profile-info">
+      <div class="profile-name" id="profileName">---</div>
+      <div class="profile-title" id="profileTitle">---</div>
+      <div class="xp-bar-track"><div class="xp-bar-fill" id="profileXpFill"></div></div>
+      <div class="xp-label"><span id="profileXpText">0 / 0 XP</span><span id="profileLevelText">Lvl 0</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== Auth Check & Nav ===== */
+(function checkAuth() {
+  const user = localStorage.getItem('cl_user');
+  if (user) {
+    try {
+      const u = JSON.parse(user);
+      const actions = document.getElementById('navActions');
+      if (actions) {
+        const streak = parseInt(localStorage.getItem('cl_streak') || '0');
+        actions.innerHTML =
+          '<div style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;border-radius:6px;' + (streak > 0 ? 'background:rgba(255,140,50,0.08);border:1px solid rgba(255,140,50,0.2);' : 'background:rgba(21,23,32,0.5);border:1px solid var(--border-subtle);opacity:0.5;') + '">' +
+            '<svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;"><path d="M12 2C6.5 6.5 3 10 3 14a9 9 0 0018 0c0-4-3.5-7.5-9-12z" fill="' + (streak > 0 ? '#ff8c32' : '#5e5b54') + '" opacity="0.8"/><path d="M12 9c-2 2-3.5 4-3.5 6a3.5 3.5 0 007 0c0-2-1.5-4-3.5-6z" fill="' + (streak > 0 ? '#ffd700' : '#3a382f') + '"/></svg>' +
+            '<span style="font-family:var(--font-display);font-size:0.8rem;color:' + (streak > 0 ? '#ff8c32' : '#5e5b54') + ';font-weight:700;">' + streak + '</span>' +
+          '</div>' +
+          '<a href="chronoloop_profile.html" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;cursor:pointer;padding:0.3rem 0.7rem;border-radius:6px;border:1px solid var(--border-subtle);background:rgba(212,168,83,0.04);transition:background 0.2s;">' +
+            '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--gold-primary),var(--gold-dim));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:0.65rem;color:var(--bg-deep);font-weight:700;">' + u.displayName.charAt(0).toUpperCase() + '</div>' +
+            '<span style="color:var(--gold-primary);font-family:var(--font-display);font-size:0.78rem;letter-spacing:0.05em;">' + u.displayName + '</span>' +
+          '</a>' +
+          `<button class="nav-link"
+              onclick="localStorage.removeItem('cl_token');localStorage.removeItem('cl_user');location.href='chronoloop_spline.html'"
+              style="border:1px solid rgba(196,92,92,0.3);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.6rem;color:var(--accent-rose);cursor:pointer;background:rgba(196,92,92,0.05);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                style="width:13px;height:13px;vertical-align:middle;margin-right:3px;">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Logout
+            </button>`;
+      }
+    } catch(e) {}
+  } else {
+    window.location.href = 'chronoloop_spline.html';
+  }
+})();
+
+/* ===== Nav Scroll ===== */
+window.addEventListener('scroll', function() { document.getElementById('mainNav').classList.toggle('scrolled', window.scrollY > 40); });
+
+/* ===== Language Toggle ===== */
+const lbFlagSvgs = {
+  en: '<rect width="640" height="480" fill="#012169"/><path d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z" fill="#fff"/><path d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z" fill="#C8102E"/><path d="M241 0v480h160V0zM0 160v160h640V160z" fill="#fff"/><path d="M0 193v96h640v-96zM273 0v480h96V0z" fill="#C8102E"/>',
+  ro: '<rect width="640" height="480" fill="#FCD116"/><rect width="213.3" height="480" fill="#002B7F"/><rect x="426.7" width="213.3" height="480" fill="#CE1126"/>'
+};
+let lbLang = localStorage.getItem('cl_lang') || 'en';
+function applyLbLanguage(lang) {
+  lbLang = lang;
+  localStorage.setItem('cl_lang', lang);
+  var flagEl = document.getElementById('langFlagIconLb');
+  if (flagEl) flagEl.innerHTML = lbFlagSvgs[lang];
+  var labelEl = document.getElementById('langLabelLb');
+  if (labelEl) labelEl.textContent = lang.toUpperCase();
+  applyLbTranslations();
+}
+function toggleLanguageLb() {
+  applyLbLanguage(lbLang === 'en' ? 'ro' : 'en');
+}
+
+/* ===== Translations ===== */
+const lbT = {
+  en: {
+    navHome: 'Home', navWorldMap: 'World Map', navArena: 'Arena', navLeaderboard: 'Leaderboard', logout: 'Logout',
+    championLabel: "This Week's Debate Champion", championStat: 'Most Arena wins this week', wins: 'Wins',
+    tabGlobal: 'Global', tabSchool: 'School',
+    schoolPlaceholder: 'Enter your school code (e.g. HIST-2026-A)', schoolSearch: 'Search',
+    headerRank: 'Rank', headerPlayer: 'Player', headerBadges: 'Era Mastery', headerLevel: 'Level',
+    levelLabel: 'Level', youLabel: '(you)', lvlPrefix: 'Lvl',
+    emptyNoClassmates: 'No classmates found', emptyCheckCode: 'Check your school code and try again',
+    emptyEnterCode: 'Enter your school code', emptyRankText: 'See how you rank against your classmates',
+    emptyNoStudents1: 'No students registered with code "', emptyNoStudents2: '" yet. Share the code with your class!',
+    eraAncient: 'Ancient', eraMedieval: 'Medieval', eraModern: 'Modern', eraContemporary: 'Contemporary',
+    levelTitles: { 1: 'Novice Chronicler', 2: 'Apprentice Historian', 3: 'Timeline Walker', 4: 'Era Scout', 5: 'Chrono Adept', 6: 'Archive Seeker', 7: 'Epoch Traveler', 8: 'History Sage', 9: 'Temporal Scholar', 10: 'Grandmaster of Time' }
+  },
+  ro: {
+    navHome: 'Acasă', navWorldMap: 'Harta Lumii', navArena: 'Arena', navLeaderboard: 'Clasament', logout: 'Deconectare',
+    championLabel: 'Campionul Dezbaterii Săptămânii', championStat: 'Cele mai multe victorii în Arenă săptămâna aceasta', wins: 'Victorii',
+    tabGlobal: 'Global', tabSchool: 'Școală',
+    schoolPlaceholder: 'Introdu codul școlii (ex. HIST-2026-A)', schoolSearch: 'Caută',
+    headerRank: 'Loc', headerPlayer: 'Jucător', headerBadges: 'Ere Stăpânite', headerLevel: 'Nivel',
+    levelLabel: 'Nivel', youLabel: '(tu)', lvlPrefix: 'Niv',
+    emptyNoClassmates: 'Niciun coleg găsit', emptyCheckCode: 'Verifică codul școlii și încearcă din nou',
+    emptyEnterCode: 'Introdu codul școlii', emptyRankText: 'Vezi cum te clasezi față de colegii tăi',
+    emptyNoStudents1: 'Niciun elev înregistrat cu codul "', emptyNoStudents2: '" încă. Împărtășește codul cu clasa ta!',
+    eraAncient: 'Antic', eraMedieval: 'Medieval', eraModern: 'Modern', eraContemporary: 'Contemporan',
+    levelTitles: { 1: 'Cronicar Începător', 2: 'Istoric Ucenic', 3: 'Călător prin Timp', 4: 'Cercetaș de Ere', 5: 'Adept Crono', 6: 'Căutător de Arhive', 7: 'Călător de Epoci', 8: 'Înțelept al Istoriei', 9: 'Erudit Temporal', 10: 'Maestru al Timpului' }
+  }
+};
+function lt(key) { return (lbT[lbLang] || lbT.en)[key] || lbT.en[key] || key; }
+function ltTitle(engTitle) {
+  var titles = (lbT[lbLang] || lbT.en).levelTitles || {};
+  for (var k in titles) { if (lbT.en.levelTitles[k] === engTitle) return titles[k]; }
+  return engTitle;
+}
+function ltEra(era) { return lt('era' + era.charAt(0).toUpperCase() + era.slice(1)); }
+
+function applyLbTranslations() {
+  var el;
+  if (el = document.getElementById('navHome')) el.textContent = lt('navHome');
+  if (el = document.getElementById('navWorldMap')) el.textContent = lt('navWorldMap');
+  if (el = document.getElementById('navArena')) el.textContent = lt('navArena');
+  if (el = document.getElementById('navLeaderboard')) el.textContent = lt('navLeaderboard');
+  if (el = document.getElementById('championLabel')) el.textContent = lt('championLabel');
+  if (el = document.getElementById('championTrophyLabel')) el.textContent = lt('wins');
+  if (el = document.getElementById('tabGlobal')) el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg> ' + lt('tabGlobal');
+  if (el = document.getElementById('tabSchool')) el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 10l10-6 10 6-10 6-10-6z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg> ' + lt('tabSchool');
+  if (el = document.getElementById('lbHeaderRank')) el.textContent = lt('headerRank');
+  if (el = document.getElementById('lbHeaderPlayer')) el.textContent = lt('headerPlayer');
+  if (el = document.getElementById('lbHeaderBadges')) el.textContent = lt('headerBadges');
+  if (el = document.getElementById('lbHeaderLevel')) el.textContent = lt('headerLevel');
+  if (el = document.getElementById('schoolCodeInput')) el.placeholder = lt('schoolPlaceholder');
+  if (el = document.getElementById('schoolSearchBtn')) el.textContent = lt('schoolSearch');
+  // Re-render dynamic content
+  if (allUsers.length > 0) { renderLeaderboard(allUsers); renderChampion(allUsers); }
+  updateProfileDisplay();
+}
+
+/* ===== Level System ===== */
+const LEVEL_THRESHOLDS = [
+  { level: 1,  xp: 0,    title: 'Novice Chronicler' },
+  { level: 2,  xp: 100,  title: 'Apprentice Historian' },
+  { level: 3,  xp: 250,  title: 'Timeline Walker' },
+  { level: 4,  xp: 500,  title: 'Era Scout' },
+  { level: 5,  xp: 800,  title: 'Chrono Adept' },
+  { level: 6,  xp: 1200, title: 'Archive Seeker' },
+  { level: 7,  xp: 1800, title: 'Epoch Traveler' },
+  { level: 8,  xp: 2500, title: 'History Sage' },
+  { level: 9,  xp: 3500, title: 'Temporal Scholar' },
+  { level: 10, xp: 5000, title: 'Grandmaster of Time' }
+];
+
+function getLevelInfo(xp) {
+  let current = LEVEL_THRESHOLDS[0];
+  let next = LEVEL_THRESHOLDS[1];
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (xp >= LEVEL_THRESHOLDS[i].xp) {
+      current = LEVEL_THRESHOLDS[i];
+      next = LEVEL_THRESHOLDS[i + 1] || null;
+      break;
+    }
+  }
+  const xpInLevel = xp - current.xp;
+  const xpNeeded = next ? next.xp - current.xp : 1;
+  const progress = next ? Math.min(xpInLevel / xpNeeded, 1) : 1;
+  return { level: current.level, title: current.title, xpInLevel, xpNeeded, progress, totalXp: xp };
+}
+
+/* ===== Profile Display ===== */
+function updateProfileDisplay() {
+  try {
+    const u = JSON.parse(localStorage.getItem('cl_user') || '{}');
+    const xp = u.xp || 0;
+    const info = getLevelInfo(xp);
+    document.getElementById('profileAvatar').textContent = (u.displayName || '?').charAt(0).toUpperCase();
+    document.getElementById('profileName').textContent = u.displayName || 'Unknown';
+    document.getElementById('profileTitle').textContent = ltTitle(info.title);
+    document.getElementById('profileXpFill').style.width = (info.progress * 100) + '%';
+    document.getElementById('profileXpText').textContent = info.xpInLevel + ' / ' + info.xpNeeded + ' XP';
+    document.getElementById('profileLevelText').textContent = lt('lvlPrefix') + ' ' + info.level;
+  } catch(e) {}
+}
+updateProfileDisplay();
+
+/* ===== Era Badge SVG Generator ===== */
+function eraBadgeSVG(era) {
+  const colors = {
+    ancient: '#4a9e8e',
+    medieval: '#5b7fb8',
+    modern: '#c45c5c',
+    contemporary: '#d4a853'
+  };
+  const color = colors[era] || '#5e5b54';
+  return '<svg class="era-badge" viewBox="0 0 24 24" fill="none" title="' + ltEra(era) + '">' +
+    '<path d="M12 2L20 7V17L12 22L4 17V7L12 2Z" fill="' + color + '" opacity="0.15" stroke="' + color + '" stroke-width="1"/>' +
+    '<text x="12" y="14.5" text-anchor="middle" font-size="7" font-family="var(--font-display)" font-weight="600" fill="' + color + '">' + era.charAt(0).toUpperCase() + '</text>' +
+  '</svg>';
+}
+
+/* ===== Medal SVGs ===== */
+function medalSVG(rank) {
+  if (rank === 1) {
+    return '<svg class="lb-rank-icon" viewBox="0 0 24 24" fill="none">' +
+      '<path d="M12 2L15 7L21 6L18 13H6L3 6L9 7L12 2Z" fill="#d4a853" opacity="0.9"/>' +
+      '<path d="M6 13H18V15C18 15.5 17.5 16 17 16H7C6.5 16 6 15.5 6 15V13Z" fill="#d4a853" opacity="0.7"/>' +
+      '<circle cx="12" cy="19" r="3" fill="none" stroke="#d4a853" stroke-width="1"/>' +
+      '<text x="12" y="21" text-anchor="middle" font-size="4" font-weight="700" fill="#d4a853">1</text>' +
+    '</svg>';
+  }
+  if (rank === 2) {
+    return '<svg class="lb-rank-icon" viewBox="0 0 24 24" fill="none">' +
+      '<circle cx="12" cy="10" r="7" fill="none" stroke="#c0c0c0" stroke-width="1.2"/>' +
+      '<circle cx="12" cy="10" r="4.5" fill="#c0c0c0" opacity="0.15"/>' +
+      '<text x="12" y="12.5" text-anchor="middle" font-size="6" font-weight="700" fill="#c0c0c0">2</text>' +
+      '<path d="M9 17L12 22L15 17" fill="none" stroke="#c0c0c0" stroke-width="1" opacity="0.6"/>' +
+    '</svg>';
+  }
+  if (rank === 3) {
+    return '<svg class="lb-rank-icon" viewBox="0 0 24 24" fill="none">' +
+      '<circle cx="12" cy="10" r="7" fill="none" stroke="#cd7f32" stroke-width="1.2"/>' +
+      '<circle cx="12" cy="10" r="4.5" fill="#cd7f32" opacity="0.15"/>' +
+      '<text x="12" y="12.5" text-anchor="middle" font-size="6" font-weight="700" fill="#cd7f32">3</text>' +
+      '<path d="M9 17L12 22L15 17" fill="none" stroke="#cd7f32" stroke-width="1" opacity="0.6"/>' +
+    '</svg>';
+  }
+  return '';
+}
+
+/* ===== Fake Seed Users ===== */
+const FAKE_USERS = [
+  { displayName: 'TimeExplorer99',   xp: 4200, eras: ['ancient','medieval','modern','contemporary'] },
+  { displayName: 'HistoryBuff_22',   xp: 2800, eras: ['ancient','medieval','modern'] },
+  { displayName: 'ChronoMaster',     xp: 1950, eras: ['medieval','modern','contemporary'] },
+  { displayName: 'EpochHunter',      xp: 1400, eras: ['ancient','modern'] },
+  { displayName: 'PastSeeker_7',     xp: 950,  eras: ['ancient','medieval'] },
+  { displayName: 'TemporalNomad',    xp: 700,  eras: ['modern','contemporary'] },
+  { displayName: 'RelicFinder',      xp: 420,  eras: ['ancient'] },
+  { displayName: 'AgesWanderer',     xp: 280,  eras: ['medieval'] },
+  { displayName: 'ChronoCadet_11',   xp: 150,  eras: ['ancient'] },
+  { displayName: 'TimeDrifter',      xp: 60,   eras: ['modern'] }
+];
+
+/* ===== Fetch & Render Leaderboard ===== */
+let allUsers = [];
+let currentTab = 'global';
+
+async function fetchLeaderboard() {
+  let apiUsers = [];
+  try {
+    const token = localStorage.getItem('cl_token');
+    const resp = await fetch('/api/leaderboard', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      apiUsers = (data.leaderboard || data || []).map(function(u) {
+        return {
+          displayName: u.displayName || u.username || 'Unknown',
+          xp: u.xp || 0,
+          userId: u.userId || u._id || '',
+          eras: u.eras || []
+        };
+      });
+    }
+  } catch(e) {
+    console.log('Leaderboard API not available, using seed data only.');
+  }
+
+  // Merge with fake users
+  allUsers = apiUsers.concat(FAKE_USERS);
+
+  // Add level info
+  allUsers.forEach(function(u) {
+    u.levelInfo = getLevelInfo(u.xp);
+  });
+
+  // Sort by level DESC, then XP DESC
+  allUsers.sort(function(a, b) {
+    if (b.levelInfo.level !== a.levelInfo.level) return b.levelInfo.level - a.levelInfo.level;
+    return b.xp - a.xp;
+  });
+
+  renderLeaderboard(allUsers);
+  renderChampion(allUsers);
+}
+
+function renderChampion(users) {
+  if (users.length > 0) {
+    const champ = users[0];
+    document.getElementById('championName').textContent = champ.displayName;
+    var translatedTitle = ltTitle(champ.levelInfo.title);
+    document.getElementById('championStat').textContent = lt('headerLevel') + ' ' + champ.levelInfo.level + ' ' + translatedTitle + ' \u2014 ' + lt('championStat');
+    document.getElementById('championWins').textContent = Math.floor(Math.random() * 8) + 5;
+  }
+}
+
+function renderLeaderboard(users) {
+  const list = document.getElementById('lbList');
+  const currentUser = (function() {
+    try { return JSON.parse(localStorage.getItem('cl_user') || '{}'); } catch(e) { return {}; }
+  })();
+
+  if (users.length === 0) {
+    list.innerHTML =
+      '<div class="empty-state">' +
+        '<svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="20" stroke="#5e5b54" stroke-width="1.5"/><path d="M16 28c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#5e5b54" stroke-width="1.5" fill="none"/><circle cx="18" cy="20" r="2" fill="#5e5b54"/><circle cx="30" cy="20" r="2" fill="#5e5b54"/></svg>' +
+        '<div class="empty-state-title">' + lt('emptyNoClassmates') + '</div>' +
+        '<div class="empty-state-desc">' + lt('emptyCheckCode') + '</div>' +
+      '</div>';
+    return;
+  }
+
+  var html = '';
+  users.forEach(function(u, i) {
+    var rank = i + 1;
+    var info = u.levelInfo;
+    var isCurrentUser = currentUser.displayName && u.displayName === currentUser.displayName;
+    var rankClass = rank <= 3 ? ' rank-' + rank : '';
+    var userClass = isCurrentUser ? ' current-user' : '';
+    var avatarClass = rank === 1 ? 'rank-1-av' : rank === 2 ? 'rank-2-av' : rank === 3 ? 'rank-3-av' : 'rank-default';
+    var delay = 0.08 * i;
+
+    // Era badges - assign some if not provided
+    var eras = u.eras || [];
+    if (eras.length === 0) {
+      if (u.xp > 0) eras = ['ancient'];
+      if (u.xp >= 200) eras.push('medieval');
+      if (u.xp >= 500) eras.push('modern');
+      if (u.xp >= 1000) eras.push('contemporary');
+    }
+
+    var badgesHTML = '';
+    eras.forEach(function(era) { badgesHTML += eraBadgeSVG(era); });
+
+    html += '<div class="lb-row' + rankClass + userClass + '" style="animation: rowSlideIn 0.5s var(--ease-out-expo) ' + delay + 's forwards;">' +
+      '<div class="lb-rank">' +
+        (rank <= 3 ? medalSVG(rank) : '') +
+        '<span class="lb-rank-num">' + (rank > 3 ? '#' + rank : '') + '</span>' +
+      '</div>' +
+      '<div class="lb-user">' +
+        '<div class="lb-avatar ' + avatarClass + '">' + u.displayName.charAt(0).toUpperCase() + '</div>' +
+        '<div class="lb-user-info">' +
+          '<div class="lb-username">' + u.displayName + (isCurrentUser ? ' <span style="font-size:0.55rem;color:var(--gold-dim);font-style:italic;">' + lt('youLabel') + '</span>' : '') + '</div>' +
+          '<div class="lb-title">' + ltTitle(info.title) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="lb-badges">' + badgesHTML + '</div>' +
+      '<div class="lb-level">' +
+        '<div class="lb-level-num">' + info.level + '</div>' +
+        '<div class="lb-level-label">' + lt('levelLabel') + '</div>' +
+      '</div>' +
+    '</div>';
+  });
+
+  list.innerHTML = html;
+}
+
+/* ===== Tab Switching ===== */
+document.getElementById('tabGlobal').addEventListener('click', function() {
+  currentTab = 'global';
+  this.classList.add('active');
+  document.getElementById('tabSchool').classList.remove('active');
+  document.getElementById('schoolInputWrap').classList.remove('visible');
+  renderLeaderboard(allUsers);
+});
+
+document.getElementById('tabSchool').addEventListener('click', function() {
+  currentTab = 'school';
+  this.classList.add('active');
+  document.getElementById('tabGlobal').classList.remove('active');
+  var wrap = document.getElementById('schoolInputWrap');
+  wrap.classList.add('visible');
+  // Show empty state until search
+  var list = document.getElementById('lbList');
+  list.innerHTML =
+    '<div class="empty-state">' +
+      '<svg viewBox="0 0 48 48" fill="none"><path d="M4 18L24 6L44 18L24 30L4 18Z" stroke="#5e5b54" stroke-width="1.5" fill="none"/><path d="M12 22V34C12 36 17.4 38 24 38S36 36 36 34V22" stroke="#5e5b54" stroke-width="1.5" fill="none"/><path d="M44 18V30" stroke="#5e5b54" stroke-width="1.5"/></svg>' +
+      '<div class="empty-state-title">' + lt('emptyEnterCode') + '</div>' +
+      '<div class="empty-state-desc">' + lt('emptyRankText') + '</div>' +
+    '</div>';
+});
+
+document.getElementById('schoolSearchBtn').addEventListener('click', function() {
+  var code = document.getElementById('schoolCodeInput').value.trim();
+  if (!code) return;
+  // Demo: show a filtered subset or empty state
+  // For demo, show a "no classmates found" state
+  var list = document.getElementById('lbList');
+  list.innerHTML =
+    '<div class="empty-state">' +
+      '<svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="20" stroke="#5e5b54" stroke-width="1.5"/><path d="M16 30c2-2 5-3 8-3s6 1 8 3" stroke="#5e5b54" stroke-width="1.5" fill="none"/><circle cx="18" cy="20" r="2" fill="#5e5b54"/><circle cx="30" cy="20" r="2" fill="#5e5b54"/></svg>' +
+      '<div class="empty-state-title">' + lt('emptyNoClassmates') + '</div>' +
+      '<div class="empty-state-desc">' + lt('emptyNoStudents1') + code + lt('emptyNoStudents2') + '</div>' +
+    '</div>';
+});
+
+document.getElementById('schoolCodeInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('schoolSearchBtn').click();
+});
+
+/* ===== Init ===== */
+applyLbLanguage(lbLang);
+fetchLeaderboard();
+</script>
+</body>
+</html>

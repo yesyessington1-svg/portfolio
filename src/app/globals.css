@@ -1,0 +1,432 @@
+@import "tailwindcss";
+
+/* Self-hosted typefaces — no CDN, no layout shift, no runtime font requests.
+   Instrument Sans: a sharp modern grotesk (display + body).
+   Geist Mono: metadata, indices, labels. */
+@import "@fontsource-variable/instrument-sans";
+@import "@fontsource-variable/geist-mono";
+/* The book reader only. A screen pretending to be paper needs a face that
+   was cut for paper. */
+@import "@fontsource-variable/literata";
+@import "@fontsource/eb-garamond/400.css";
+@import "@fontsource/eb-garamond/400-italic.css";
+@import "@fontsource/eb-garamond/600.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
+  --font-book: "EB Garamond", "Literata Variable", Georgia, serif;
+
+  /* ---- Paper, for the book reader ---- */
+  --color-paper: #f2ece1;
+  --color-paper-edge: #e4dccd;
+  --color-paper-shade: #d8cfbc;
+  --color-ink-text: #2a2620;
+  --color-ink-soft: #5d564b;
+  --color-ink-faint: #938a7c;
+
+  /* ---- Palette: near-black + a single restrained accent ---- */
+  --color-ink-950: #08080a;
+  --color-ink-900: #0c0c0f;
+  --color-ink-850: #101014;
+  --color-ink-800: #16161b;
+  --color-ink-700: #1e1e25;
+
+  --color-bone-50: #f4f4f5;
+  --color-bone-200: #d6d6db;
+  --color-bone-400: #9a9aa4;
+  --color-bone-500: #74747f;
+  --color-bone-600: #55555f;
+  --color-bone-700: #3a3a42;
+
+  /* The one accent. Used for state, emphasis and nothing else. */
+  --color-flare: #de4536;
+  --color-flare-soft: #ff6a58;
+
+  /* ---- shadcn / Watermelon token surface (dark values) ---- */
+  --color-background: var(--color-ink-950);
+  --color-foreground: var(--color-bone-50);
+  --color-card: var(--color-ink-900);
+  --color-card-foreground: var(--color-bone-50);
+  --color-popover: var(--color-ink-850);
+  --color-popover-foreground: var(--color-bone-50);
+  --color-primary: var(--color-bone-50);
+  --color-primary-foreground: var(--color-ink-950);
+  --color-secondary: var(--color-ink-800);
+  --color-secondary-foreground: var(--color-bone-200);
+  --color-muted: var(--color-ink-800);
+  --color-muted-foreground: var(--color-bone-500);
+  --color-accent: var(--color-ink-800);
+  --color-accent-foreground: var(--color-bone-50);
+  --color-destructive: var(--color-flare);
+  --color-border: #21212a;
+  --color-input: #21212a;
+  --color-ring: var(--color-bone-600);
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Marquee.
+
+   Watermelon's <Marquee /> ships expecting `animate-marquee` from a
+   Tailwind theme key:
+
+     --animate-marquee: marquee var(--duration) linear infinite;
+
+   That cannot work. A custom property resolves the var()s inside it
+   where it is DECLARED — on :root — and `--duration` is set by the
+   component on an element far below. So `var(--duration)` is invalid at
+   :root, the whole property becomes the guaranteed-invalid value, and
+   what inherits down is nothing at all. Computed `animation: none`, and
+   the marquee sits perfectly still.
+
+   Declaring it as a normal class fixes it, because then var(--duration)
+   is resolved on the element itself, where the component's
+   `[--duration:40s]` is in scope and per-instance speed still works.
+   ──────────────────────────────────────────────────────────────── */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap, 0px)));
+  }
+}
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap, 0px)));
+  }
+}
+
+@layer components {
+  .marquee-track {
+    animation: marquee var(--duration, 40s) linear infinite;
+  }
+  .marquee-track-vertical {
+    animation: marquee-vertical var(--duration, 40s) linear infinite;
+  }
+}
+
+/* Watermelon components read these as raw CSS vars (e.g. ScrollFade gradients) */
+:root {
+  --background: #08080a;
+  --foreground: #f4f4f5;
+  --border: #21212a;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    /* Lenis owns the scroll; never let the browser fight it */
+    scroll-behavior: auto;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ink-950);
+    color: var(--color-bone-50);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01" 1, "cv01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background-color: var(--color-flare);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+@layer components {
+  /* Display type: tight, optically corrected, never generic */
+  .display {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 0.92;
+    text-wrap: balance;
+  }
+
+  .label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 400;
+  }
+
+  .shell {
+    width: 100%;
+    max-width: 84rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+  @media (min-width: 1024px) {
+    .shell {
+      padding-inline: 3.5rem;
+    }
+  }
+
+  /* Hairline rules that read as engineered, not decorative */
+  .rule {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(
+      to right,
+      var(--color-border) 0%,
+      var(--color-border) 65%,
+      transparent 100%
+    );
+  }
+
+  /* GSAP line-mask reveal primitives */
+  .line-mask {
+    display: block;
+    overflow: hidden;
+    padding-bottom: 0.08em;
+  }
+  .line-inner {
+    display: block;
+    will-change: transform;
+  }
+
+  /* Underline that draws on hover, left to right */
+  .link-draw {
+    position: relative;
+    display: inline-block;
+  }
+  .link-draw::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -0.1em;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .link-draw:hover::after {
+    transform: scaleX(1);
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   The book reader.
+
+   Text is laid out as one CSS multi-column flow with a fixed height, so
+   the browser paginates it for us. The frame is a window one or two
+   columns wide, and turning a page is a transform on the flow. That
+   means real pagination — no scrollbar, no cut-off lines, and the page
+   count changes correctly when the window resizes.
+   ──────────────────────────────────────────────────────────────── */
+@layer components {
+  .book-stage {
+    background:
+      radial-gradient(120% 90% at 50% 0%, #17171c 0%, transparent 60%),
+      var(--color-ink-950);
+  }
+
+  .book-page {
+    background-color: var(--color-paper);
+    /* Fibre and a faint vertical tone, so it isn't a flat rectangle. */
+    background-image: radial-gradient(
+        circle at 20% 10%,
+        rgba(255, 255, 255, 0.55),
+        transparent 55%
+      ),
+      linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.035) 0%,
+        transparent 12%,
+        transparent 88%,
+        rgba(0, 0, 0, 0.035) 100%
+      );
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.5) inset,
+      0 40px 80px -30px rgba(0, 0, 0, 0.85),
+      0 0 0 1px var(--color-paper-edge);
+  }
+
+  /* The spine. A crease, not a canyon — the wide gradient version read as a
+     dark stripe down the middle of the page. */
+  .book-spine::before,
+  .book-spine::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .book-spine::before {
+    width: 30px;
+    transform: translateX(-15px);
+    background: radial-gradient(
+      ellipse 60% 100% at 50% 50%,
+      rgba(96, 84, 66, 0.09),
+      transparent 72%
+    );
+  }
+  .book-spine::after {
+    width: 1px;
+    transform: translateX(-0.5px);
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(96, 84, 66, 0.22) 14%,
+      rgba(96, 84, 66, 0.22) 86%,
+      transparent
+    );
+  }
+
+  /* The leaf that flips over during a page turn. */
+  .book-leaf {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 15;
+    pointer-events: none;
+    opacity: 0;
+    background-color: var(--color-paper);
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.5),
+      transparent 40%
+    );
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  .book-flow {
+    font-family: var(--font-book);
+    color: var(--color-ink-text);
+    column-fill: auto;
+    hyphens: auto;
+    text-align: justify;
+    text-justify: inter-word;
+    will-change: transform;
+  }
+
+  .book-flow p {
+    margin: 0 0 0.85em;
+    font-size: 1.0625rem;
+    line-height: 1.62;
+    orphans: 2;
+    widows: 2;
+  }
+
+  /* Continuous prose reads better with indents than with gaps, except
+     straight after a heading or a break. */
+  .book-flow p + p {
+    text-indent: 1.35em;
+    margin-top: -0.85em;
+    padding-top: 0.85em;
+  }
+
+  .book-flow h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+    margin: 1.6em 0 0.9em;
+    break-after: avoid;
+    text-align: left;
+    text-indent: 0;
+  }
+  .book-flow h2:first-child {
+    margin-top: 0;
+  }
+
+  .book-flow blockquote {
+    margin: 1.4em 0;
+    padding-left: 1.1em;
+    border-left: 2px solid var(--color-paper-shade);
+    font-style: italic;
+    color: var(--color-ink-soft);
+    text-align: left;
+  }
+
+  .book-flow .attribution {
+    margin: -0.9em 0 1.5em 1.1em;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+    text-align: left;
+    text-indent: 0;
+  }
+
+  .book-flow .ornament {
+    margin: 1.6em 0;
+    text-align: center;
+    color: var(--color-ink-faint);
+    letter-spacing: 0.5em;
+    text-indent: 0;
+  }
+
+  /* Opening paragraph of a chapter: drop cap, no indent. */
+  .book-flow .opening {
+    text-indent: 0;
+  }
+  .book-flow .opening::first-letter {
+    float: left;
+    font-size: 3.1em;
+    line-height: 0.82;
+    padding: 0.06em 0.08em 0 0;
+    font-weight: 600;
+  }
+
+  .book-folio {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.16em;
+    color: var(--color-ink-faint);
+  }
+}
+
+/* Fine tonal grain — kills the flat-gradient look without adding colour */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .line-inner {
+    transform: none !important;
+  }
+}

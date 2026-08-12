@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="demo-api.js"></script>
+<!-- demo backend: re-implements the game API in the browser, no server needed -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronoloop — Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #0a0b0f;
+  --bg-primary: #0f1117;
+  --bg-card: #151720;
+  --bg-card-hover: #1a1d2a;
+  --bg-surface: #1c1f2e;
+  --border-subtle: rgba(255,215,120,0.08);
+  --border-medium: rgba(255,215,120,0.15);
+  --gold-primary: #d4a853;
+  --gold-light: #f0d48a;
+  --gold-dim: #8a7034;
+  --gold-glow: rgba(212,168,83,0.3);
+  --text-primary: #e8e4dc;
+  --text-secondary: #9b978e;
+  --text-muted: #5e5b54;
+  --accent-teal: #4a9e8e;
+  --accent-rose: #c45c5c;
+  --accent-blue: #5b7fb8;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  --font-typewriter: 'Special Elite', 'Courier New', monospace;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: var(--gold-dim) var(--bg-deep); }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }
+
+html, body {
+  width: 100%; min-height: 100vh;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+/* ── Film Grain ── */
+.film-grain {
+  position: fixed; inset: 0; z-index: 9999;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+
+/* ── NAV (matches spline/hub pages) ── */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  padding: 0 3rem; height: 72px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(10,11,15,0.6);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.3s;
+}
+.nav.scrolled { background: rgba(10,11,15,0.92); }
+.nav-logo { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; cursor: pointer; }
+.nav-logo svg { width: 36px; height: 36px; }
+.nav-logo-text {
+  font-family: var(--font-display); font-size: 1.15rem; font-weight: 500;
+  letter-spacing: 0.2em; color: var(--gold-primary); text-transform: uppercase;
+}
+.nav-links { display: flex; align-items: center; gap: 0.3rem; }
+.nav-link {
+  font-size: 0.78rem; font-weight: 500; letter-spacing: 0.06em;
+  color: var(--text-secondary); text-decoration: none;
+  padding: 0.5rem 1rem; border-radius: 6px;
+  transition: color 0.25s, background 0.25s; cursor: pointer;
+  font-family: var(--font-body); background: none; border: none;
+}
+.nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-link.active { color: var(--gold-primary); }
+.nav-actions { display: flex; align-items: center; gap: 0.75rem; }
+
+/* ── MAIN CONTENT ── */
+.arena-container {
+  width: 100%; min-height: 100vh;
+  padding-top: 80px; padding-bottom: 100px;
+  display: flex; flex-direction: column; align-items: center;
+}
+
+/* ── MODE SELECTION ── */
+.mode-selection {
+  width: 100%; max-width: 900px;
+  padding: 0 2rem;
+  display: flex; flex-direction: column; align-items: center;
+}
+.arena-title {
+  font-family: var(--font-display);
+  font-size: 2.6rem; font-weight: 300;
+  color: var(--gold-light);
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin-bottom: 0.4rem;
+}
+.arena-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.mode-cards {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 1.5rem; width: 100%;
+}
+.mode-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.4s var(--ease-out-expo);
+  overflow: hidden;
+}
+.mode-card::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(212,168,83,0.04) 0%, transparent 70%);
+  opacity: 0; transition: opacity 0.4s ease;
+}
+.mode-card:hover::before { opacity: 1; }
+.mode-card:not(.disabled):hover {
+  border-color: var(--border-medium);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 30px rgba(212,168,83,0.06);
+}
+.mode-card.disabled {
+  cursor: not-allowed; opacity: 0.55;
+}
+.mode-card-icon {
+  width: 72px; height: 72px;
+  margin-bottom: 1.2rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 16px;
+  background: rgba(212,168,83,0.06);
+  border: 1px solid var(--border-subtle);
+}
+.mode-card-icon svg { width: 40px; height: 40px; }
+.mode-card-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem; font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+.mode-card-desc {
+  font-size: 0.78rem; color: var(--text-secondary);
+  line-height: 1.5; max-width: 260px;
+}
+/* Coming Soon ribbon */
+.coming-soon-ribbon {
+  position: absolute;
+  top: 22px; right: -34px;
+  background: linear-gradient(135deg, var(--accent-rose), #a04040);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.55rem; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 5px 40px;
+  transform: rotate(45deg);
+  box-shadow: 0 2px 10px rgba(196,92,92,0.3);
+  z-index: 2;
+}
+
+/* ── SCREEN SYSTEM ── */
+.screen { display: none; width: 100%; max-width: 1100px; padding: 0 2rem; }
+.screen.active { display: flex; flex-direction: column; align-items: center; }
+
+/* ── LOBBY ── */
+.lobby-topic-badge {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 1rem; border-radius: 20px;
+  background: rgba(212,168,83,0.06);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-body); font-size: 0.6rem;
+  color: var(--gold-dim); letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 0.8rem;
+}
+.lobby-topic {
+  font-family: var(--font-display);
+  font-size: 2rem; font-weight: 500;
+  color: var(--gold-light);
+  text-align: center;
+  margin-bottom: 0.6rem;
+  line-height: 1.3;
+}
+.lobby-stances {
+  display: flex; gap: 1.5rem; margin-bottom: 1.5rem;
+  flex-wrap: wrap; justify-content: center;
+}
+.stance-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1rem 1.3rem;
+  min-width: 220px; max-width: 320px; flex: 1;
+}
+.stance-label {
+  font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 0.4rem;
+}
+.stance-label.ai { color: var(--accent-rose); }
+.stance-label.player { color: var(--accent-teal); }
+.stance-text {
+  font-family: var(--font-display);
+  font-size: 0.95rem; color: var(--text-primary);
+  line-height: 1.4;
+}
+.lobby-timer-section {
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 1.5rem;
+}
+.timer-label {
+  font-size: 0.6rem; color: var(--text-muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+.timer-display {
+  font-family: var(--font-display);
+  font-size: 2.8rem; font-weight: 300;
+  color: var(--gold-primary);
+  letter-spacing: 0.08em;
+}
+.timer-display.warning { color: var(--accent-rose); }
+.timer-bar-track {
+  width: 200px; height: 3px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px; overflow: hidden;
+  margin-top: 0.3rem;
+}
+.timer-bar-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-primary));
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+.card-select-label {
+  font-size: 0.9rem; color: var(--text-secondary);
+  margin-bottom: 1.2rem;
+}
+.card-select-label span { color: var(--gold-primary); font-weight: 600; }
+
+/* ── ARGUMENT CARDS ── */
+.arg-cards-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1.1rem; width: 100%;
+  margin-bottom: 1.8rem;
+}
+.arg-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 1.5rem 1.4rem;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out-expo);
+  overflow: hidden;
+}
+.arg-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  border-radius: 12px 12px 0 0;
+  opacity: 0.6;
+}
+.arg-card[data-type="causal"]::before { background: var(--gold-primary); }
+.arg-card[data-type="economic"]::before { background: var(--accent-teal); }
+.arg-card[data-type="military"]::before { background: var(--accent-rose); }
+.arg-card[data-type="ideological"]::before { background: var(--accent-blue); }
+.arg-card[data-type="biographical"]::before { background: #9b7fcf; }
+
+.arg-card:hover {
+  border-color: var(--border-medium);
+  transform: translateY(-2px);
+}
+.arg-card.selected {
+  border-color: var(--gold-primary);
+  background: var(--bg-card-hover);
+  box-shadow: 0 0 20px rgba(212,168,83,0.1);
+}
+.arg-card.selected::after {
+  content: ''; position: absolute; top: 8px; right: 8px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--gold-primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.arg-card.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+.arg-card-type {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 0.6rem; padding: 0.25rem 0.6rem;
+  border-radius: 5px;
+  font-weight: 600;
+}
+.arg-card[data-type="causal"] .arg-card-type { color: var(--gold-primary); background: rgba(212,168,83,0.1); }
+.arg-card[data-type="economic"] .arg-card-type { color: var(--accent-teal); background: rgba(74,158,142,0.1); }
+.arg-card[data-type="military"] .arg-card-type { color: var(--accent-rose); background: rgba(196,92,92,0.1); }
+.arg-card[data-type="ideological"] .arg-card-type { color: var(--accent-blue); background: rgba(91,127,184,0.1); }
+.arg-card[data-type="biographical"] .arg-card-type { color: #9b7fcf; background: rgba(155,127,207,0.1); }
+
+.arg-card-type svg { width: 13px; height: 13px; }
+.arg-card-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem; font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+.arg-card-desc {
+  font-size: 0.85rem; color: var(--text-secondary);
+  line-height: 1.55;
+}
+.arg-card-strength {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin-top: 0.7rem;
+  font-size: 0.65rem; color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+.strength-dots { display: flex; gap: 3px; }
+.strength-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-muted);
+}
+.strength-dot.filled { background: var(--gold-primary); }
+
+/* Ready button */
+.btn-ready {
+  padding: 0.8rem 2.5rem;
+  background: linear-gradient(135deg, var(--gold-primary), var(--gold-dim));
+  border: none; border-radius: 10px;
+  font-family: var(--font-display);
+  font-size: 1rem; font-weight: 600;
+  color: var(--bg-deep);
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out-expo);
+  letter-spacing: 0.05em;
+}
+.btn-ready:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px var(--gold-glow);
+}
+.btn-ready:disabled {
+  opacity: 0.35; cursor: not-allowed;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+/* ── DEBATE ROUND ── */
+.round-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.round-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.25rem 0.8rem; border-radius: 20px;
+  background: rgba(212,168,83,0.08);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.55rem; color: var(--gold-dim);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+.round-title {
+  font-family: var(--font-display);
+  font-size: 1.8rem; font-weight: 500;
+  color: var(--gold-light);
+  margin-bottom: 0.3rem;
+}
+.round-desc {
+  font-size: 0.75rem; color: var(--text-secondary);
+}
+
+/* Card battle area */
+.battle-area {
+  display: flex; gap: 2rem; width: 100%;
+  justify-content: center; align-items: flex-start;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.battle-side {
+  flex: 1; min-width: 280px; max-width: 400px;
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+.side-label {
+  font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+  text-align: center; margin-bottom: 0.3rem;
+}
+.side-label.player-side { color: var(--accent-teal); }
+.side-label.ai-side { color: var(--accent-rose); }
+.vs-divider {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 0.5rem;
+}
+.vs-text {
+  font-family: var(--font-display);
+  font-size: 1.5rem; font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Battle card */
+.battle-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.2rem 1.3rem;
+  opacity: 0; transform: translateX(-30px);
+  animation: cardSlideIn 0.5s var(--ease-out-expo) forwards;
+}
+.battle-card.ai-card {
+  transform: translateX(30px);
+}
+.battle-card.ai-card { animation-name: cardSlideInRight; }
+@keyframes cardSlideIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes cardSlideInRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.battle-card .arg-card-type { margin-bottom: 0.4rem; }
+.battle-card .arg-card-title { font-size: 1.1rem; }
+.battle-card .arg-card-desc { font-size: 0.8rem; }
+
+/* Score display */
+.score-panel {
+  display: flex; gap: 1.5rem;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+.score-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.8rem 1.5rem;
+  text-align: center;
+  min-width: 140px;
+}
+.score-box-label {
+  font-size: 0.5rem; color: var(--text-muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 0.2rem;
+}
+.score-box-value {
+  font-family: var(--font-display);
+  font-size: 1.8rem; font-weight: 600;
+}
+.score-box-value.player-score { color: var(--accent-teal); }
+.score-box-value.ai-score { color: var(--accent-rose); }
+
+/* ── REBUTTAL ── */
+.rebuttal-question {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-rose);
+  border-radius: 0 10px 10px 0;
+  padding: 1.2rem 1.5rem;
+  margin-bottom: 1.5rem;
+  width: 100%;
+}
+.rebuttal-ai-label {
+  font-size: 0.55rem; color: var(--accent-rose);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+.rebuttal-text {
+  font-family: var(--font-display);
+  font-size: 1.1rem; color: var(--text-primary);
+  line-height: 1.5; font-style: italic;
+}
+.rebuttal-target {
+  font-size: 0.65rem; color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+.response-options {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0.8rem; width: 100%;
+  margin-bottom: 1.5rem;
+}
+.response-option {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out-expo);
+  text-align: left;
+}
+.response-option:hover {
+  border-color: var(--border-medium);
+  transform: translateY(-2px);
+}
+.response-option.selected-correct {
+  border-color: var(--accent-teal);
+  background: rgba(74,158,142,0.1);
+}
+.response-option.selected-wrong {
+  border-color: var(--accent-rose);
+  background: rgba(196,92,92,0.08);
+}
+.response-option.selected-trap {
+  border-color: #ff6b35;
+  background: rgba(255,107,53,0.08);
+}
+.response-option.revealed-correct {
+  border-color: var(--accent-teal);
+  box-shadow: 0 0 15px rgba(74,158,142,0.15);
+}
+.response-option-letter {
+  font-family: var(--font-display);
+  font-size: 0.75rem; font-weight: 700;
+  color: var(--gold-primary);
+  margin-bottom: 0.3rem;
+}
+.response-option-text {
+  font-size: 0.72rem; color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* ── FINAL EVIDENCE ── */
+.evidence-drop-area {
+  display: flex; gap: 2rem; width: 100%;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.evidence-card-slot {
+  flex: 1; min-width: 250px; max-width: 380px;
+  text-align: center;
+}
+.evidence-card-slot .side-label { margin-bottom: 0.5rem; }
+
+/* ── POST MATCH ── */
+.post-match { text-align: center; }
+.winner-announcement {
+  margin-bottom: 1.5rem;
+  opacity: 0;
+  animation: fadeUp 0.8s var(--ease-out-expo) 0.3s forwards;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.winner-icon { margin-bottom: 0.8rem; }
+.winner-icon svg { width: 64px; height: 64px; }
+.winner-text {
+  font-family: var(--font-display);
+  font-size: 2.2rem; font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.winner-text.win { color: var(--gold-light); }
+.winner-text.loss { color: var(--accent-rose); }
+.winner-sub {
+  font-size: 0.8rem; color: var(--text-secondary);
+}
+
+.verdict-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  max-width: 600px;
+  margin-left: auto; margin-right: auto;
+  text-align: left;
+  opacity: 0;
+  animation: fadeUp 0.6s var(--ease-out-expo) 0.6s forwards;
+}
+.verdict-label {
+  font-size: 0.55rem; color: var(--gold-dim);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.verdict-label svg { width: 14px; height: 14px; }
+.verdict-text {
+  font-family: var(--font-display);
+  font-size: 0.92rem; color: var(--text-primary);
+  line-height: 1.6; font-style: italic;
+}
+
+.xp-breakdown {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.2rem 1.5rem;
+  margin-bottom: 1.5rem;
+  max-width: 350px;
+  margin-left: auto; margin-right: auto;
+  opacity: 0;
+  animation: fadeUp 0.6s var(--ease-out-expo) 0.9s forwards;
+}
+.xp-row {
+  display: flex; justify-content: space-between;
+  padding: 0.3rem 0;
+  font-size: 0.72rem;
+}
+.xp-row-label { color: var(--text-secondary); }
+.xp-row-value { color: var(--gold-primary); font-weight: 600; font-family: var(--font-display); }
+.xp-row.total {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.3rem; padding-top: 0.5rem;
+}
+.xp-row.total .xp-row-label { color: var(--text-primary); font-weight: 600; }
+.xp-row.total .xp-row-value { font-size: 1rem; color: var(--gold-light); }
+
+.post-actions {
+  display: flex; gap: 0.8rem; justify-content: center;
+  opacity: 0;
+  animation: fadeUp 0.6s var(--ease-out-expo) 1.2s forwards;
+}
+.btn-post {
+  padding: 0.7rem 1.8rem;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-size: 0.85rem; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out-expo);
+  letter-spacing: 0.04em;
+  border: none;
+}
+.btn-post.primary {
+  background: linear-gradient(135deg, var(--gold-primary), var(--gold-dim));
+  color: var(--bg-deep);
+}
+.btn-post.secondary {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.btn-post:hover { transform: translateY(-2px); }
+.btn-post.primary:hover { box-shadow: 0 8px 25px var(--gold-glow); }
+
+/* ── CONTINUE BUTTON (generic) ── */
+.btn-continue {
+  padding: 0.7rem 2rem;
+  background: linear-gradient(135deg, var(--gold-primary), var(--gold-dim));
+  border: none; border-radius: 10px;
+  font-family: var(--font-display);
+  font-size: 0.9rem; font-weight: 600;
+  color: var(--bg-deep);
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out-expo);
+  letter-spacing: 0.04em;
+}
+.btn-continue:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px var(--gold-glow);
+}
+
+/* ── LOADING SPINNER ── */
+.loading-spinner {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.8rem; padding: 2rem;
+}
+.spinner-ring {
+  width: 36px; height: 36px;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--gold-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-text {
+  font-size: 0.7rem; color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+/* ── TOPIC SELECT ── */
+.topic-select {
+  width: 100%; max-width: 900px; padding: 0 2rem;
+}
+.topic-select-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem; font-weight: 500;
+  color: var(--gold-light);
+  text-align: center; margin-bottom: 0.3rem;
+}
+.topic-select-sub {
+  font-size: 0.75rem; color: var(--text-secondary);
+  text-align: center; margin-bottom: 1.5rem;
+}
+.topic-grid {
+  display: grid; grid-template-columns: 1fr;
+  gap: 0.7rem;
+}
+.topic-row {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.1rem 1.3rem;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out-expo);
+  display: flex; align-items: center; gap: 1rem;
+}
+.topic-row:hover {
+  border-color: var(--border-medium);
+  transform: translateY(-2px);
+  background: var(--bg-card-hover);
+}
+.topic-num {
+  font-family: var(--font-display);
+  font-size: 1.3rem; font-weight: 600;
+  color: var(--gold-dim);
+  min-width: 30px;
+}
+.topic-info { flex: 1; }
+.topic-question {
+  font-family: var(--font-display);
+  font-size: 1.05rem; font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 0.2rem;
+}
+.topic-era {
+  font-size: 0.6rem; color: var(--text-muted);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.topic-arrow {
+  color: var(--gold-dim);
+  transition: transform 0.3s ease;
+}
+.topic-row:hover .topic-arrow { transform: translateX(4px); }
+.topic-arrow svg { width: 20px; height: 20px; }
+
+/* ── PLAYER PROFILE OVERLAY ── */
+.ui-layer { position: fixed; z-index: 10; pointer-events: none; }
+.ui-layer > * { pointer-events: auto; }
+.ui-bottom-left { bottom: 1.8rem; left: 2rem; }
+.profile-card {
+  background: rgba(10,11,15,0.8);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px; padding: 0.9rem 1.1rem;
+  display: flex; align-items: center; gap: 0.8rem;
+  min-width: 240px;
+}
+.profile-card:hover { border-color: var(--border-medium); }
+.profile-avatar {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--gold-dim), var(--gold-primary));
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 1.05rem;
+  font-weight: 600; color: var(--bg-deep); flex-shrink: 0;
+}
+.profile-info { flex: 1; min-width: 0; }
+.profile-name {
+  font-size: 0.8rem; font-weight: 600;
+  color: var(--text-primary); margin-bottom: 0.1rem;
+}
+.profile-title {
+  font-size: 0.55rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--gold-dim);
+  margin-bottom: 0.4rem;
+}
+.xp-bar-track {
+  width: 100%; height: 3px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px; overflow: hidden;
+}
+.xp-bar-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-primary));
+  border-radius: 2px; transition: width 0.5s ease;
+}
+.xp-label {
+  display: flex; justify-content: space-between;
+  margin-top: 0.15rem; font-size: 0.5rem;
+  color: var(--text-muted);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .mode-cards { grid-template-columns: 1fr; }
+  .arg-cards-grid { grid-template-columns: 1fr 1fr; }
+  .response-options { grid-template-columns: 1fr; }
+  .battle-area { flex-direction: column; align-items: center; }
+  .vs-divider { transform: rotate(90deg); padding: 0.5rem 0; }
+  .nav { padding: 0 1.5rem; }
+  .nav-links { display: none; }
+  .arena-title { font-size: 2rem; }
+  .ui-bottom-left { bottom: 1rem; left: 1rem; }
+}
+@media (max-width: 480px) {
+  .arg-cards-grid { grid-template-columns: 1fr; }
+  .lobby-topic { font-size: 1.5rem; }
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+</style>
+</head>
+<body>
+
+<div class="film-grain"></div>
+
+<!-- NAV -->
+<nav class="nav" id="mainNav">
+  <a class="nav-logo" href="chronoloop_spline.html">
+    <svg viewBox="0 0 36 36" fill="none"><path d="M18 2 L32 10 L32 26 L18 34 L4 26 L4 10 Z" stroke="#d4a853" stroke-width="0.8" fill="none" opacity="0.4"/><path d="M12 10 L24 10 L18 18 L24 26 L12 26 L18 18 Z" stroke="#d4a853" stroke-width="1.2" fill="none" opacity="0.8"/><path d="M18 14 L21 18 L18 22 L15 18 Z" fill="#d4a853" opacity="0.6"/><path d="M10 18 A 8 8 0 0 1 18 10" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/><path d="M26 18 A 8 8 0 0 1 18 26" stroke="#d4a853" stroke-width="0.5" fill="none" opacity="0.25"/></svg>
+    <span class="nav-logo-text">Chronoloop</span>
+  </a>
+  <div class="nav-links" id="navLinks">
+    <a class="nav-link" id="navHome" href="chronoloop_spline.html">Home</a>
+    <a class="nav-link" id="navWorldMap" href="chronoloop_hub.html">World Map</a>
+    <a class="nav-link active" id="navArena" href="chronoloop_arena.html">Arena</a>
+    <a class="nav-link" id="navLeaderboard" href="chronoloop_leaderboard.html">Leaderboard</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-actions" id="navActions"></div>
+
+    <button class="nav-link" id="langToggleBtnArena"
+      onclick="toggleLanguageArena()"
+      style="border:1px solid var(--border-subtle);border-radius:6px;padding:0.3rem 0.5rem;font-size:0.7rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;background:rgba(10,11,15,0.5);">
+      <svg id="langFlagIconArena" viewBox="0 0 640 480" style="width:20px;height:14px;border-radius:2px;flex-shrink:0;"></svg>
+      <span id="langLabelArena" style="font-size:0.55rem;letter-spacing:0.05em;color:var(--text-secondary);">EN</span>
+    </button>
+  </div>
+</nav>
+
+<!-- PLAYER PROFILE OVERLAY -->
+<div class="ui-layer ui-bottom-left">
+  <div class="profile-card" id="profileCard" style="display:none;">
+    <div class="profile-avatar" id="profileAvatar"></div>
+    <div class="profile-info">
+      <div class="profile-name" id="profileName"></div>
+      <div class="profile-title" id="profileTitle"></div>
+      <div class="xp-bar-track"><div class="xp-bar-fill" id="profileXpFill"></div></div>
+      <div class="xp-label"><span id="profileXpCurrent"></span><span id="profileXpNext"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="arena-container" id="arenaContainer">
+
+  <!-- SCREEN: Mode Selection -->
+  <div class="screen active" id="screenModeSelect">
+    <div class="mode-selection">
+      <h1 class="arena-title" id="arenaTitle">The Arena</h1>
+      <p class="arena-subtitle" id="arenaSubtitle">Test your historical knowledge in structured debate</p>
+      <div class="mode-cards">
+        <!-- PvP Card (disabled) -->
+        <div class="mode-card disabled">
+          <div class="coming-soon-ribbon" id="comingSoonRibbon">Coming Soon</div>
+          <div class="mode-card-icon">
+            <svg viewBox="0 0 40 40" fill="none">
+              <path d="M8 8 L18 20 L8 32" stroke="#d4a853" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+              <path d="M32 8 L22 20 L32 32" stroke="#d4a853" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+              <path d="M14 14 L20 20 L14 26" stroke="#d4a853" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+              <path d="M26 14 L20 20 L26 26" stroke="#d4a853" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+              <circle cx="20" cy="20" r="2.5" fill="#d4a853" opacity="0.5"/>
+              <circle cx="8" cy="6" r="3" stroke="#d4a853" stroke-width="1" fill="none" opacity="0.3"/>
+              <circle cx="32" cy="6" r="3" stroke="#d4a853" stroke-width="1" fill="none" opacity="0.3"/>
+            </svg>
+          </div>
+          <div class="mode-card-title" id="pvpTitle">Player vs Player</div>
+          <div class="mode-card-desc" id="pvpDesc">Challenge another historian to a live debate. Real-time arguments, real-time scoring.</div>
+        </div>
+        <!-- PvAI Card -->
+        <div class="mode-card" onclick="showTopicSelect()">
+          <div class="mode-card-icon">
+            <svg viewBox="0 0 40 40" fill="none">
+              <rect x="10" y="8" width="20" height="24" rx="3" stroke="#d4a853" stroke-width="1.2" fill="none" opacity="0.5"/>
+              <circle cx="20" cy="17" r="4" stroke="#d4a853" stroke-width="1.2" fill="none" opacity="0.7"/>
+              <circle cx="20" cy="17" r="1.5" fill="#d4a853" opacity="0.6"/>
+              <path d="M14 26 L16 24 L18 26 L20 23 L22 26 L24 24 L26 26" stroke="#d4a853" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+              <line x1="15" y1="29" x2="25" y2="29" stroke="#d4a853" stroke-width="0.8" opacity="0.3"/>
+              <path d="M6 14 L10 17" stroke="#d4a853" stroke-width="0.8" opacity="0.3"/>
+              <path d="M6 20 L10 20" stroke="#d4a853" stroke-width="0.8" opacity="0.3"/>
+              <path d="M34 14 L30 17" stroke="#d4a853" stroke-width="0.8" opacity="0.3"/>
+              <path d="M34 20 L30 20" stroke="#d4a853" stroke-width="0.8" opacity="0.3"/>
+            </svg>
+          </div>
+          <div class="mode-card-title" id="pvaiTitle">Player vs AI</div>
+          <div class="mode-card-desc" id="pvaiDesc">Debate against an AI opponent on pivotal historical questions. Choose your evidence wisely.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: Topic Select -->
+  <div class="screen" id="screenTopicSelect">
+    <div class="topic-select">
+      <h2 class="topic-select-title" id="topicSelectTitle">Choose Your Debate</h2>
+      <p class="topic-select-sub" id="topicSelectSub">Select a historical question to argue</p>
+      <div class="topic-grid" id="topicGrid"></div>
+    </div>
+  </div>
+
+  <!-- SCREEN: Lobby -->
+  <div class="screen" id="screenLobby">
+    <div class="lobby-topic-badge">
+      <svg viewBox="0 0 16 16" fill="none" style="width:12px;height:12px;"><path d="M8 1 L10 6 L15 6 L11 9.5 L12.5 15 L8 11.5 L3.5 15 L5 9.5 L1 6 L6 6 Z" stroke="#d4a853" stroke-width="1" fill="none"/></svg>
+      <span id="lobbyBadgeText">Debate Topic</span>
+    </div>
+    <h2 class="lobby-topic" id="lobbyTopic"></h2>
+    <div class="lobby-stances">
+      <div class="stance-box">
+        <div class="stance-label ai" id="lobbyAiLabel">AI Argues</div>
+        <div class="stance-text" id="lobbyAiStance"></div>
+      </div>
+      <div class="stance-box">
+        <div class="stance-label player" id="lobbyPlayerLabel">You Argue</div>
+        <div class="stance-text" id="lobbyPlayerStance"></div>
+      </div>
+    </div>
+    <div class="lobby-timer-section">
+      <div class="timer-label" id="timerLabel">Preparation Time</div>
+      <div class="timer-display" id="lobbyTimer">1:30</div>
+      <div class="timer-bar-track"><div class="timer-bar-fill" id="timerBarFill"></div></div>
+    </div>
+    <div class="card-select-label" id="cardSelectLabel">Select <span>3</span> argument cards for your opening</div>
+    <div class="arg-cards-grid" id="lobbyCards"></div>
+    <button class="btn-ready" id="btnReady" disabled onclick="startDebate()">Select 3 Cards to Begin</button>
+  </div>
+
+  <!-- SCREEN: Round 1 - Opening -->
+  <div class="screen" id="screenRound1">
+    <div class="round-header">
+      <div class="round-badge">
+        <svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;"><circle cx="8" cy="8" r="6" stroke="#d4a853" stroke-width="1.2" fill="none"/><text x="8" y="11" text-anchor="middle" fill="#d4a853" font-size="8" font-family="serif">1</text></svg>
+        <span id="r1Badge">Round 1 of 3</span>
+      </div>
+      <h2 class="round-title" id="r1Title">Opening Arguments</h2>
+      <p class="round-desc" id="r1Desc">Both sides present their evidence cards</p>
+    </div>
+    <div class="score-panel">
+      <div class="score-box">
+        <div class="score-box-label" id="r1PlayerLabel">Your Score</div>
+        <div class="score-box-value player-score" id="r1PlayerScore">0</div>
+      </div>
+      <div class="score-box">
+        <div class="score-box-label" id="r1AiLabel">AI Score</div>
+        <div class="score-box-value ai-score" id="r1AiScore">0</div>
+      </div>
+    </div>
+    <div class="battle-area" id="r1BattleArea"></div>
+    <button class="btn-continue" id="btnToRound2" style="display:none;" onclick="startRound2()">Continue to Round 2</button>
+  </div>
+
+  <!-- SCREEN: Round 2 - Rebuttal -->
+  <div class="screen" id="screenRound2">
+    <div class="round-header">
+      <div class="round-badge">
+        <svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;"><circle cx="8" cy="8" r="6" stroke="#d4a853" stroke-width="1.2" fill="none"/><text x="8" y="11" text-anchor="middle" fill="#d4a853" font-size="8" font-family="serif">2</text></svg>
+        <span id="r2Badge">Round 2 of 3</span>
+      </div>
+      <h2 class="round-title" id="r2Title">Rebuttal</h2>
+      <p class="round-desc" id="r2Desc">The AI challenges one of your arguments. Choose your response wisely.</p>
+    </div>
+    <div class="score-panel">
+      <div class="score-box">
+        <div class="score-box-label" id="r2PlayerLabel">Your Score</div>
+        <div class="score-box-value player-score" id="r2PlayerScore">0</div>
+      </div>
+      <div class="score-box">
+        <div class="score-box-label" id="r2AiLabel">AI Score</div>
+        <div class="score-box-value ai-score" id="r2AiScore">0</div>
+      </div>
+    </div>
+    <div id="rebuttalContent">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+        <div class="spinner-text" id="r2SpinnerText">AI is formulating a challenge...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: Round 3 - Final Evidence -->
+  <div class="screen" id="screenRound3">
+    <div class="round-header">
+      <div class="round-badge">
+        <svg viewBox="0 0 16 16" fill="none" style="width:10px;height:10px;"><circle cx="8" cy="8" r="6" stroke="#d4a853" stroke-width="1.2" fill="none"/><text x="8" y="11" text-anchor="middle" fill="#d4a853" font-size="8" font-family="serif">3</text></svg>
+        <span id="r3Badge">Round 3 of 3</span>
+      </div>
+      <h2 class="round-title" id="r3Title">Final Evidence</h2>
+      <p class="round-desc" id="r3Desc">Each side plays one last decisive card</p>
+    </div>
+    <div class="score-panel">
+      <div class="score-box">
+        <div class="score-box-label" id="r3PlayerLabel">Your Score</div>
+        <div class="score-box-value player-score" id="r3PlayerScore">0</div>
+      </div>
+      <div class="score-box">
+        <div class="score-box-label" id="r3AiLabel">AI Score</div>
+        <div class="score-box-value ai-score" id="r3AiScore">0</div>
+      </div>
+    </div>
+    <div id="round3Content"></div>
+  </div>
+
+  <!-- SCREEN: Post Match -->
+  <div class="screen" id="screenPostMatch">
+    <div class="post-match">
+      <div class="winner-announcement" id="winnerAnnouncement"></div>
+      <div class="verdict-box" id="verdictBox">
+        <div class="verdict-label">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M8 1 L10 6 L15 6 L11 9.5 L12.5 15 L8 11.5 L3.5 15 L5 9.5 L1 6 L6 6 Z" stroke="#8a7034" stroke-width="1" fill="none"/></svg>
+          <span id="verdictLabel">Historian's Verdict</span>
+        </div>
+        <div class="verdict-text" id="verdictText">
+          <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-text" id="verdictSpinner">Consulting the historical record...</div>
+          </div>
+        </div>
+      </div>
+      <div class="xp-breakdown" id="xpBreakdown"></div>
+      <div class="post-actions">
+        <button class="btn-post primary" id="btnPlayAgain" onclick="playAgain()">Play Again</button>
+        <button class="btn-post secondary" id="btnBackArena" onclick="backToArena()">Back to Arena</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── AUTH CHECK ──
+(function checkAuth() {
+  const user = localStorage.getItem('cl_user');
+  if (user) {
+    try {
+      const u = JSON.parse(user);
+      const actions = document.getElementById('navActions');
+      if (actions) {
+        const streak = parseInt(localStorage.getItem('cl_streak') || '0');
+        actions.innerHTML =
+          '<div style="display:flex;align-items:center;gap:0.3rem;padding:0.2rem 0.5rem;border-radius:6px;' + (streak > 0 ? 'background:rgba(255,140,50,0.08);border:1px solid rgba(255,140,50,0.2);' : 'background:rgba(21,23,32,0.5);border:1px solid var(--border-subtle);opacity:0.5;') + '">' +
+            '<svg viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;"><path d="M12 2C6.5 6.5 3 10 3 14a9 9 0 0018 0c0-4-3.5-7.5-9-12z" fill="' + (streak > 0 ? '#ff8c32' : '#5e5b54') + '" opacity="0.8"/><path d="M12 9c-2 2-3.5 4-3.5 6a3.5 3.5 0 007 0c0-2-1.5-4-3.5-6z" fill="' + (streak > 0 ? '#ffd700' : '#3a382f') + '"/></svg>' +
+            '<span style="font-family:var(--font-display);font-size:0.8rem;color:' + (streak > 0 ? '#ff8c32' : '#5e5b54') + ';font-weight:700;">' + streak + '</span>' +
+          '</div>' +
+          '<a href="chronoloop_profile.html" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;cursor:pointer;padding:0.3rem 0.7rem;border-radius:6px;border:1px solid var(--border-subtle);background:rgba(212,168,83,0.04);transition:background 0.2s;">' +
+            '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--gold-primary),var(--gold-dim));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:0.65rem;color:var(--bg-deep);font-weight:700;">' + u.displayName.charAt(0).toUpperCase() + '</div>' +
+            '<span style="color:var(--gold-primary);font-family:var(--font-display);font-size:0.78rem;letter-spacing:0.05em;">' + u.displayName + '</span>' +
+          '</a>' +
+          `<button class="nav-link"
+              onclick="localStorage.removeItem('cl_token');localStorage.removeItem('cl_user');location.href='chronoloop_spline.html'"
+              style="border:1px solid rgba(196,92,92,0.3);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.6rem;color:var(--accent-rose);cursor:pointer;background:rgba(196,92,92,0.05);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                style="width:13px;height:13px;vertical-align:middle;margin-right:3px;">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Logout
+            </button>`;
+      }
+    } catch(e) {}
+  } else {
+    window.location.href = 'chronoloop_spline.html';
+  }
+})();
+
+// ── NAV SCROLL ──
+window.addEventListener('scroll', function() { document.getElementById('mainNav').classList.toggle('scrolled', window.scrollY > 40); });
+
+// ── LANGUAGE TOGGLE ──
+const arenaFlagSvgs = {
+  en: '<rect width="640" height="480" fill="#012169"/><path d="m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0z" fill="#fff"/><path d="m424 281 216 159v40L369 281zm-184 20 6 35L54 480H0zM640 0v3L391 191l2-44L590 0zM0 0l239 176h-60L0 42z" fill="#C8102E"/><path d="M241 0v480h160V0zM0 160v160h640V160z" fill="#fff"/><path d="M0 193v96h640v-96zM273 0v480h96V0z" fill="#C8102E"/>',
+  ro: '<rect width="640" height="480" fill="#FCD116"/><rect width="213.3" height="480" fill="#002B7F"/><rect x="426.7" width="213.3" height="480" fill="#CE1126"/>'
+};
+let arenaLang = localStorage.getItem('cl_lang') || 'en';
+function applyArenaLanguage(lang) {
+  arenaLang = lang;
+  localStorage.setItem('cl_lang', lang);
+  var flagEl = document.getElementById('langFlagIconArena');
+  if (flagEl) flagEl.innerHTML = arenaFlagSvgs[lang];
+  var labelEl = document.getElementById('langLabelArena');
+  if (labelEl) labelEl.textContent = lang.toUpperCase();
+  if (typeof applyArenaTranslations === 'function') applyArenaTranslations();
+}
+function toggleLanguageArena() {
+  applyArenaLanguage(arenaLang === 'en' ? 'ro' : 'en');
+}
+
+// ── ARENA TRANSLATIONS ──
+const aT = {
+  en: {
+    navHome:'Home',navWorldMap:'World Map',navArena:'Arena',navLeaderboard:'Leaderboard',logout:'Logout',
+    arenaTitle:'The Arena',arenaSubtitle:'Test your historical knowledge in structured debate',
+    comingSoon:'Coming Soon',pvpTitle:'Player vs Player',pvpDesc:'Challenge another historian to a live debate. Real-time arguments, real-time scoring.',
+    pvaiTitle:'Player vs AI',pvaiDesc:'Debate against an AI opponent on pivotal historical questions. Choose your evidence wisely.',
+    topicTitle:'Choose Your Debate',topicSub:'Select a historical question to argue',
+    debateTopic:'Debate Topic',aiArgues:'AI Argues',youArgue:'You Argue',
+    prepTime:'Preparation Time',cardSelect:'Select <span>3</span> argument cards for your opening',
+    readyBtn:'Ready — Enter the Arena',selectMore1:'Select ',selectMore2:' more card',selectMore2s:'s',
+    strength:'Strength',
+    r1Badge:'Round 1 of 3',r1Title:'Opening Arguments',r1Desc:'Both sides present their evidence cards',
+    r2Badge:'Round 2 of 3',r2Title:'Rebuttal',r2Desc:'The AI challenges one of your arguments. Choose your response wisely.',
+    r3Badge:'Round 3 of 3',r3Title:'Final Evidence',r3Desc:'Each side plays one last decisive card',
+    yourScore:'Your Score',aiScore:'AI Score',yourArgs:'Your Arguments',aiArgs:'AI Arguments',
+    aiChallenges:'AI Challenges',targetingCard:'Targeting your card:',
+    chooseFinal:'Choose your final evidence card',yourFinalEvidence:'Your Final Evidence',aiFinalEvidence:'AI Final Evidence',
+    yourFinalScore:'Your Final Score',aiFinalScore:'AI Final Score',seeResults:'See Results',
+    continueR2:'Continue to Round 2',continueFinal:'Continue to Final Round',
+    victory:'Victory',defeat:'Defeat',
+    winSub1:'Your arguments carried the day. ',winSub2:' to ',
+    lossSub1:"The AI's arguments prevailed. ",
+    verdictLabel:"Historian's Verdict",consultingRecord:'Consulting the historical record...',
+    spinnerText:'AI is formulating a challenge...',
+    victoryBonus:'Victory Bonus',participation:'Participation',evidenceQuality:'Evidence Quality',
+    noContradictions:'No Contradictions',totalEarned:'Total Earned',
+    playAgain:'Play Again',backToArena:'Back to Arena',
+    contradictionTitle:'Contradiction Exposed',contradictionDesc:'Your earlier response contradicted your core argument. The AI exploits this inconsistency for a decisive point advantage.',
+    closingTitle:'Closing Evidence',closingDesc:'Drawing from the weight of historical consensus, the structural interpretation remains compelling when considering the full scope of evidence from the period.',
+    contradictionPenalty:'Contradiction penalty:',points:'points',
+    causal:'causal',economic:'economic',military:'military',ideological:'ideological',biographical:'biographical'
+  },
+  ro: {
+    navHome:'Acasă',navWorldMap:'Harta Lumii',navArena:'Arena',navLeaderboard:'Clasament',logout:'Deconectare',
+    arenaTitle:'Arena',arenaSubtitle:'Testează-ți cunoștințele istorice în dezbateri structurate',
+    comingSoon:'În Curând',pvpTitle:'Jucător vs Jucător',pvpDesc:'Provoacă un alt istoric la o dezbatere live. Argumente în timp real, punctaj în timp real.',
+    pvaiTitle:'Jucător vs AI',pvaiDesc:'Dezbate contra unui adversar AI pe întrebări istorice cruciale. Alege-ți dovezile cu grijă.',
+    topicTitle:'Alege Dezbaterea',topicSub:'Selectează o întrebare istorică pentru dezbatere',
+    debateTopic:'Subiect de Dezbatere',aiArgues:'AI Argumentează',youArgue:'Tu Argumentezi',
+    prepTime:'Timp de Pregătire',cardSelect:'Selectează <span>3</span> cărți de argumente pentru deschidere',
+    readyBtn:'Gata — Intră în Arenă',selectMore1:'Selectează încă ',selectMore2:' carte',selectMore2s:' cărți',
+    strength:'Putere',
+    r1Badge:'Runda 1 din 3',r1Title:'Argumente de Deschidere',r1Desc:'Ambele părți prezintă cărțile de dovezi',
+    r2Badge:'Runda 2 din 3',r2Title:'Contraargument',r2Desc:'AI-ul contestă unul dintre argumentele tale. Alege-ți răspunsul cu grijă.',
+    r3Badge:'Runda 3 din 3',r3Title:'Dovada Finală',r3Desc:'Fiecare parte joacă o ultimă carte decisivă',
+    yourScore:'Scorul Tău',aiScore:'Scorul AI',yourArgs:'Argumentele Tale',aiArgs:'Argumentele AI',
+    aiChallenges:'AI Contestă',targetingCard:'Vizând cartea ta:',
+    chooseFinal:'Alege cartea ta finală de dovezi',yourFinalEvidence:'Dovada Ta Finală',aiFinalEvidence:'Dovada Finală a AI',
+    yourFinalScore:'Scorul Tău Final',aiFinalScore:'Scorul Final al AI',seeResults:'Vezi Rezultatele',
+    continueR2:'Continuă la Runda 2',continueFinal:'Continuă la Runda Finală',
+    victory:'Victorie',defeat:'Înfrângere',
+    winSub1:'Argumentele tale au câștigat. ',winSub2:' la ',
+    lossSub1:'Argumentele AI au prevalat. ',
+    verdictLabel:'Verdictul Istoricului',consultingRecord:'Consultând registrul istoric...',
+    spinnerText:'AI-ul formulează o provocare...',
+    victoryBonus:'Bonus de Victorie',participation:'Participare',evidenceQuality:'Calitatea Dovezilor',
+    noContradictions:'Fără Contradicții',totalEarned:'Total Câștigat',
+    playAgain:'Joacă Din Nou',backToArena:'Înapoi la Arenă',
+    contradictionTitle:'Contradicție Descoperită',contradictionDesc:'Răspunsul tău anterior a contrazis argumentul tău de bază. AI-ul exploatează această inconsistență pentru un avantaj decisiv de puncte.',
+    closingTitle:'Dovadă de Încheiere',closingDesc:'Bazându-se pe consensul istoric, interpretarea structurală rămâne convingătoare când se ia în considerare întreaga amploare a dovezilor din perioadă.',
+    contradictionPenalty:'Penalizare contradicție:',points:'puncte',
+    causal:'cauzal',economic:'economic',military:'militar',ideological:'ideologic',biographical:'biografic'
+  }
+};
+function at(key) { return (aT[arenaLang]||aT.en)[key] || aT.en[key] || key; }
+
+function applyArenaTranslations() {
+  var el;
+  if(el=document.getElementById('navHome'))el.textContent=at('navHome');
+  if(el=document.getElementById('navWorldMap'))el.textContent=at('navWorldMap');
+  if(el=document.getElementById('navArena'))el.textContent=at('navArena');
+  if(el=document.getElementById('navLeaderboard'))el.textContent=at('navLeaderboard');
+  if(el=document.getElementById('arenaTitle'))el.textContent=at('arenaTitle');
+  if(el=document.getElementById('arenaSubtitle'))el.textContent=at('arenaSubtitle');
+  if(el=document.getElementById('comingSoonRibbon'))el.textContent=at('comingSoon');
+  if(el=document.getElementById('pvpTitle'))el.textContent=at('pvpTitle');
+  if(el=document.getElementById('pvpDesc'))el.textContent=at('pvpDesc');
+  if(el=document.getElementById('pvaiTitle'))el.textContent=at('pvaiTitle');
+  if(el=document.getElementById('pvaiDesc'))el.textContent=at('pvaiDesc');
+  if(el=document.getElementById('topicSelectTitle'))el.textContent=at('topicTitle');
+  if(el=document.getElementById('topicSelectSub'))el.textContent=at('topicSub');
+  if(el=document.getElementById('lobbyBadgeText'))el.textContent=at('debateTopic');
+  if(el=document.getElementById('lobbyAiLabel'))el.textContent=at('aiArgues');
+  if(el=document.getElementById('lobbyPlayerLabel'))el.textContent=at('youArgue');
+  if(el=document.getElementById('timerLabel'))el.textContent=at('prepTime');
+  if(el=document.getElementById('cardSelectLabel'))el.innerHTML=at('cardSelect');
+  if(el=document.getElementById('r1Badge'))el.textContent=at('r1Badge');
+  if(el=document.getElementById('r1Title'))el.textContent=at('r1Title');
+  if(el=document.getElementById('r1Desc'))el.textContent=at('r1Desc');
+  if(el=document.getElementById('r1PlayerLabel'))el.textContent=at('yourScore');
+  if(el=document.getElementById('r1AiLabel'))el.textContent=at('aiScore');
+  if(el=document.getElementById('r2Badge'))el.textContent=at('r2Badge');
+  if(el=document.getElementById('r2Title'))el.textContent=at('r2Title');
+  if(el=document.getElementById('r2Desc'))el.textContent=at('r2Desc');
+  if(el=document.getElementById('r2PlayerLabel'))el.textContent=at('yourScore');
+  if(el=document.getElementById('r2AiLabel'))el.textContent=at('aiScore');
+  if(el=document.getElementById('r2SpinnerText'))el.textContent=at('spinnerText');
+  if(el=document.getElementById('r3Badge'))el.textContent=at('r3Badge');
+  if(el=document.getElementById('r3Title'))el.textContent=at('r3Title');
+  if(el=document.getElementById('r3Desc'))el.textContent=at('r3Desc');
+  if(el=document.getElementById('r3PlayerLabel'))el.textContent=at('yourScore');
+  if(el=document.getElementById('r3AiLabel'))el.textContent=at('aiScore');
+  if(el=document.getElementById('verdictLabel'))el.textContent=at('verdictLabel');
+  if(el=document.getElementById('verdictSpinner'))el.textContent=at('consultingRecord');
+  if(el=document.getElementById('btnPlayAgain'))el.textContent=at('playAgain');
+  if(el=document.getElementById('btnBackArena'))el.textContent=at('backToArena');
+  // Re-render topic list items in-place (without switching screens)
+  var topicGrid=document.getElementById('topicGrid');
+  if(topicGrid && topicGrid.children.length>0 && typeof TOPICS!=='undefined') {
+    topicGrid.querySelectorAll('.topic-row').forEach(function(row, i) {
+      if(TOPICS[i]) {
+        var qEl=row.querySelector('.topic-question');
+        var eEl=row.querySelector('.topic-era');
+        if(qEl) qEl.textContent=topicQ(TOPICS[i]);
+        if(eEl) eEl.textContent=topicEra(TOPICS[i]);
+      }
+    });
+  }
+  // Re-render lobby/debate text if mid-game
+  if(typeof currentTopic!=='undefined' && currentTopic) {
+    var lt=document.getElementById('lobbyTopic');
+    if(lt) lt.textContent=topicQ(currentTopic);
+    var las=document.getElementById('lobbyAiStance');
+    if(las) las.textContent=topicAiStance(currentTopic);
+    var lps=document.getElementById('lobbyPlayerStance');
+    if(lps) lps.textContent=topicPlayerStance(currentTopic);
+    if(typeof renderLobbyCards==='function') {
+      var lobbyGrid=document.getElementById('lobbyCards');
+      if(lobbyGrid && lobbyGrid.children.length>0) renderLobbyCards();
+    }
+    if(typeof updateReadyButton==='function') updateReadyButton();
+  }
+  // Update labels that use at() in round screens
+  var r1YourArgLabel=document.getElementById('r1YourArgLabel');
+  if(r1YourArgLabel) r1YourArgLabel.textContent=at('yourArgs');
+  var r1AiArgLabel=document.getElementById('r1AiArgLabel');
+  if(r1AiArgLabel) r1AiArgLabel.textContent=at('aiArgs');
+  var r2ChallengeLabel=document.getElementById('r2ChallengeLabel');
+  if(r2ChallengeLabel) r2ChallengeLabel.textContent=at('aiChallenges');
+  var r3ChooseLabel=document.getElementById('r3ChooseLabel');
+  if(r3ChooseLabel) r3ChooseLabel.textContent=at('chooseFinal');
+  var continueR2Btn=document.getElementById('btnContinueR2');
+  if(continueR2Btn) continueR2Btn.textContent=at('continueR2');
+  var continueFinalBtn=document.getElementById('btnContinueFinal');
+  if(continueFinalBtn) continueFinalBtn.textContent=at('continueFinal');
+  var seeResultsBtn=document.getElementById('btnSeeResults');
+  if(seeResultsBtn) seeResultsBtn.textContent=at('seeResults');
+  var timerLabelEl=document.getElementById('timerLabel');
+  if(timerLabelEl) timerLabelEl.textContent=at('prepTime');
+  var cardSelectEl=document.getElementById('cardSelectLabel');
+  if(cardSelectEl) cardSelectEl.innerHTML=at('cardSelect');
+}
+
+// ── TOPIC TRANSLATIONS ──
+function topicQ(t){return arenaLang==='ro'&&t.question_ro?t.question_ro:t.question;}
+function topicAiStance(t){return arenaLang==='ro'&&t.aiStance_ro?t.aiStance_ro:t.aiStance;}
+function topicPlayerStance(t){return arenaLang==='ro'&&t.playerStance_ro?t.playerStance_ro:t.playerStance;}
+function topicEra(t){return arenaLang==='ro'&&t.era_ro?t.era_ro:t.era;}
+function cardTitle(c){return arenaLang==='ro'&&c.title_ro?c.title_ro:c.title;}
+function cardDesc(c){return arenaLang==='ro'&&c.description_ro?c.description_ro:c.description;}
+function cardType(c){return at(c.type);}
+
+// ── LEVEL THRESHOLDS & PROFILE ──
+const LEVEL_THRESHOLDS = [
+  { level: 1, xp: 0, title: 'Novice Scribe' },
+  { level: 2, xp: 100, title: 'Apprentice Chronicler' },
+  { level: 3, xp: 300, title: 'Journeyman Historian' },
+  { level: 4, xp: 600, title: 'Adept Archivist' },
+  { level: 5, xp: 1000, title: 'Scholar of Ages' },
+  { level: 6, xp: 1500, title: 'Master Antiquarian' },
+  { level: 7, xp: 2200, title: 'Grand Chronicler' },
+  { level: 8, xp: 3000, title: 'Temporal Sage' },
+  { level: 9, xp: 4000, title: 'Keeper of Epochs' },
+  { level: 10, xp: 5500, title: 'Archon of Time' }
+];
+
+function getLevelInfo(xp) {
+  let current = LEVEL_THRESHOLDS[0];
+  let next = LEVEL_THRESHOLDS[1];
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (xp >= LEVEL_THRESHOLDS[i].xp) {
+      current = LEVEL_THRESHOLDS[i];
+      next = LEVEL_THRESHOLDS[i + 1] || null;
+      break;
+    }
+  }
+  return { current, next };
+}
+
+function updateProfileDisplay(user) {
+  const card = document.getElementById('profileCard');
+  if (!user || !card) return;
+  card.style.display = 'flex';
+  document.getElementById('profileAvatar').textContent = user.displayName.charAt(0).toUpperCase();
+  document.getElementById('profileName').textContent = user.displayName;
+  const info = getLevelInfo(user.xp || 0);
+  document.getElementById('profileTitle').textContent = 'Lvl ' + info.current.level + ' — ' + info.current.title;
+  if (info.next) {
+    const progress = ((user.xp - info.current.xp) / (info.next.xp - info.current.xp)) * 100;
+    document.getElementById('profileXpFill').style.width = Math.min(progress, 100) + '%';
+    document.getElementById('profileXpCurrent').textContent = user.xp + ' XP';
+    document.getElementById('profileXpNext').textContent = info.next.xp + ' XP';
+  } else {
+    document.getElementById('profileXpFill').style.width = '100%';
+    document.getElementById('profileXpCurrent').textContent = user.xp + ' XP';
+    document.getElementById('profileXpNext').textContent = 'MAX';
+  }
+}
+
+(function initProfile() {
+  try {
+    const u = JSON.parse(localStorage.getItem('cl_user'));
+    if (u) updateProfileDisplay(u);
+  } catch(e) {}
+})();
+
+// ── GEMINI API ──
+// The Gemini key lives server-side now. /api/gemini holds it in an
+// environment variable and forwards the request.
+const GEMINI_URL = '/api/gemini';
+
+async function callGemini(prompt) {
+  try {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+      })
+    });
+    if (!res.ok) throw new Error('API error ' + res.status);
+    const data = await res.json();
+    return data.candidates[0].content.parts[0].text;
+  } catch(e) {
+    console.error('Gemini error:', e);
+    return null;
+  }
+}
+
+// ── DEBATE TOPICS ──
+const TOPICS = [
+  {
+    id: 'ww1-inevitable',
+    question: 'Was World War I Inevitable?',
+    question_ro: 'A fost Primul Război Mondial inevitabil?',
+    era: 'Early 20th Century', era_ro: 'Începutul Secolului XX',
+    aiStance: 'Yes \u2014 structural forces made it unavoidable',
+    aiStance_ro: 'Da \u2014 forțele structurale l-au făcut inevitabil',
+    playerStance: 'No \u2014 it could have been prevented',
+    playerStance_ro: 'Nu \u2014 putea fi prevenit',
+    playerCards: [
+      { type: 'causal', title: 'The Assassination Factor', title_ro: 'Factorul Asasinatului', description: 'The war was triggered by the assassination of Archduke Franz Ferdinand \u2014 a contingent event that could have been prevented or handled differently by diplomats.', description_ro: 'Războiul a fost declanșat de asasinarea Arhiducelui Franz Ferdinand \u2014 un eveniment contingent care putea fi prevenit sau gestionat diferit de diplomați.', strength: 7 },
+      { type: 'ideological', title: 'Peace Movements', title_ro: 'Mișcările Pacifiste', description: 'Strong socialist and pacifist movements across Europe actively opposed war. The Second International had millions of members committed to preventing conflict.', description_ro: 'Mișcări socialiste și pacifiste puternice din toată Europa se opuneau activ războiului. Internaționala a Doua avea milioane de membri dedicați prevenirii conflictului.', strength: 6 },
+      { type: 'economic', title: 'Economic Interdependence', title_ro: 'Interdependența Economică', description: 'European economies were deeply intertwined through trade and investment. Norman Angell argued in 1910 that war would be economically irrational for all parties.', description_ro: 'Economiile europene erau profund interconectate prin comerț și investiții. Norman Angell argumenta în 1910 că războiul ar fi irațional economic pentru toate părțile.', strength: 8 },
+      { type: 'biographical', title: 'Kaiser Wilhelm\'s Hesitation', title_ro: 'Ezitarea Kaiserului Wilhelm', description: 'Kaiser Wilhelm II wavered repeatedly during the July Crisis and attempted to halt mobilization, suggesting that individual leadership could have changed the outcome.', description_ro: 'Kaiser Wilhelm al II-lea a ezitat repetat în timpul Crizei din Iulie și a încercat să oprească mobilizarea, sugerând că liderii individuali puteau schimba rezultatul.', strength: 5 },
+      { type: 'military', title: 'Mobilization Was a Choice', title_ro: 'Mobilizarea a Fost o Alegere', description: 'Military mobilization plans like the Schlieffen Plan were political choices, not inevitable outcomes. Leaders chose to activate them despite alternatives.', description_ro: 'Planurile de mobilizare militară precum Planul Schlieffen au fost alegeri politice, nu rezultate inevitabile. Liderii au ales să le activeze în ciuda alternativelor.', strength: 7 },
+      { type: 'causal', title: 'The Blank Check Alternative', title_ro: 'Alternativa Cecului în Alb', description: 'Germany\'s "blank check" to Austria-Hungary was a deliberate policy decision. Had Germany counseled restraint, the crisis could have been contained like previous Balkan crises.', description_ro: 'Cecul în alb al Germaniei pentru Austro-Ungaria a fost o decizie politică deliberată. Dacă Germania ar fi recomandat moderație, criza putea fi controlată ca crizele balcanice anterioare.', strength: 8 }
+    ],
+    aiCards: [
+      { type: 'military', title: 'Arms Race Momentum', title_ro: 'Impulsul Cursei Înarmării', description: 'The naval arms race between Britain and Germany, combined with massive land army buildups, created unstoppable military momentum and war planning that demanded action.', description_ro: 'Cursa navală a înarmărilor între Marea Britanie și Germania, combinată cu creșteri masive ale armatelor terestre, a creat un impuls militar de neoprit.', strength: 8 },
+      { type: 'ideological', title: 'Nationalist Pressure', title_ro: 'Presiunea Naționalistă', description: 'Rising nationalism across Europe \u2014 Pan-Slavism, Pan-Germanism, French revanchism \u2014 created popular pressures that no government could resist indefinitely.', description_ro: 'Naționalismul în creștere în toată Europa \u2014 Panslavismul, Pangermanismul, revanșismul francez \u2014 a creat presiuni populare cărora niciun guvern nu le putea rezista.', strength: 7 },
+      { type: 'causal', title: 'Alliance System Trap', title_ro: 'Capcana Sistemului de Alianțe', description: 'The rigid alliance system (Triple Alliance vs Triple Entente) meant any local conflict would automatically escalate into a continental war. The structure made war inevitable.', description_ro: 'Sistemul rigid de alianțe (Tripla Alianță vs Tripla Înțelegere) însemna că orice conflict local ar escalada automat într-un război continental. Structura a făcut războiul inevitabil.', strength: 9 }
+    ]
+  },
+  {
+    id: 'versailles-ww2',
+    question: 'Did the Treaty of Versailles Cause World War II?',
+    question_ro: 'A cauzat Tratatul de la Versailles Al Doilea Război Mondial?',
+    era: 'Interwar Period', era_ro: 'Perioada Interbelică',
+    aiStance: 'Yes \u2014 the treaty\'s harsh terms directly led to WWII',
+    aiStance_ro: 'Da \u2014 termenii duri ai tratatului au condus direct la Al Doilea Război Mondial',
+    playerStance: 'No \u2014 other factors were more decisive',
+    playerStance_ro: 'Nu \u2014 alți factori au fost mai decisivi',
+    playerCards: [
+      { type: 'economic', title: 'Great Depression Impact', title_ro: 'Impactul Marii Crize', description: 'The 1929 economic crash, not Versailles, radicalized German politics. Without the Depression, the Nazi Party would have remained a fringe movement.', description_ro: 'Criza economică din 1929, nu Versailles, a radicalizat politica germană. Fără Marea Criză, Partidul Nazist ar fi rămas o mișcare marginală.', strength: 8 },
+      { type: 'biographical', title: 'Hitler\'s Agency', title_ro: 'Rolul lui Hitler', description: 'WWII required the specific decisions of Adolf Hitler. His ideology and risk-taking were not inevitable consequences of any treaty.', description_ro: 'Al Doilea Război Mondial a necesitat deciziile specifice ale lui Adolf Hitler. Ideologia și asumarea riscurilor sale nu erau consecințe inevitabile ale vreunui tratat.', strength: 7 },
+      { type: 'ideological', title: 'Appeasement Failure', title_ro: 'Eșecul Concilierii', description: 'British and French appeasement in the 1930s emboldened aggression. Firmer responses to the Rhineland remilitarization could have stopped Hitler.', description_ro: 'Politica de conciliere britanică și franceză din anii 1930 a încurajat agresiunea. Răspunsuri mai ferme la remilitarizarea Renaniei l-ar fi putut opri pe Hitler.', strength: 7 },
+      { type: 'causal', title: 'Weimar\'s Potential', title_ro: 'Potențialul Weimarului', description: 'The Weimar Republic showed democratic potential in the mid-1920s (Stresemann era). Treaty revision through diplomacy was already underway before extremism took hold.', description_ro: 'Republica de la Weimar a arătat potențial democratic la mijlocul anilor 1920 (era Stresemann). Revizuirea tratatului prin diplomație era deja în curs înainte ca extremismul să prindă rădăcini.', strength: 6 },
+      { type: 'military', title: 'Soviet Factor', title_ro: 'Factorul Sovietic', description: 'The Nazi-Soviet Pact of 1939 enabled the invasion of Poland. Stalin\'s calculations were driven by Soviet interests, not Versailles.', description_ro: 'Pactul Nazi-Sovietic din 1939 a permis invadarea Poloniei. Calculele lui Stalin erau determinate de interesele sovietice, nu de Versailles.', strength: 6 },
+      { type: 'economic', title: 'Reparations Were Renegotiated', title_ro: 'Reparațiile au Fost Renegociate', description: 'The Dawes Plan (1924) and Young Plan (1929) significantly reduced reparations. By 1932, payments were effectively cancelled at the Lausanne Conference.', description_ro: 'Planul Dawes (1924) și Planul Young (1929) au redus semnificativ reparațiile. Până în 1932, plățile au fost efectiv anulate la Conferința de la Lausanne.', strength: 8 }
+    ],
+    aiCards: [
+      { type: 'economic', title: 'Crushing Reparations', title_ro: 'Reparații Zdrobitoare', description: 'The 132 billion gold marks in reparations crippled Germany\'s economy, causing hyperinflation in 1923 and creating the desperation that fueled extremism.', description_ro: 'Cele 132 de miliarde de mărci de aur în reparații au paralizat economia Germaniei, provocând hiperinflație în 1923 și creând disperarea care a alimentat extremismul.', strength: 8 },
+      { type: 'ideological', title: 'War Guilt Humiliation', title_ro: 'Umilirea Vinovăției de Război', description: 'Article 231 (the War Guilt Clause) humiliated Germany, creating a deep national resentment that Hitler expertly exploited to rise to power.', description_ro: 'Articolul 231 (Clauza Vinovăției de Război) a umilit Germania, creând o resentiment național profund pe care Hitler l-a exploatat cu măiestrie.', strength: 9 },
+      { type: 'military', title: 'Territorial Losses', title_ro: 'Pierderi Teritoriale', description: 'Germany lost 13% of its territory and 10% of its population, plus all colonies. These losses created irredentist demands that drove expansionist policy.', description_ro: 'Germania a pierdut 13% din teritoriu și 10% din populație, plus toate coloniile. Aceste pierderi au creat cereri iredentiste care au determinat politica expansionistă.', strength: 7 }
+    ]
+  },
+  {
+    id: 'atomic-bombing',
+    question: 'Was the Atomic Bombing of Japan Justified?',
+    question_ro: 'A fost bombardamentul atomic al Japoniei justificat?',
+    era: 'World War II, 1945', era_ro: 'Al Doilea Război Mondial, 1945',
+    aiStance: 'Yes \u2014 it saved more lives than it took',
+    aiStance_ro: 'Da \u2014 a salvat mai multe vieți decât a luat',
+    playerStance: 'No \u2014 alternatives existed',
+    playerStance_ro: 'Nu \u2014 existau alternative',
+    playerCards: [
+      { type: 'military', title: 'Japan Was Already Defeated', title_ro: 'Japonia Era Deja Înfrântă', description: 'By mid-1945, Japan\'s navy was destroyed, its cities firebombed, and its supply lines cut. The Strategic Bombing Survey concluded Japan would have surrendered without the bomb.', description_ro: 'Până la mijlocul lui 1945, marina Japoniei era distrusă, orașele bombardate, liniile de aprovizionare tăiate. Japonia ar fi capitulat fără bombă.', strength: 8 },
+      { type: 'ideological', title: 'Demonstration Option', title_ro: 'Opțiunea Demonstrației', description: 'Scientists on the Franck Committee proposed demonstrating the bomb on an uninhabited area to shock Japan into surrender without mass civilian casualties.', description_ro: 'Oamenii de știință din Comitetul Franck au propus demonstrarea bombei într-o zonă nelocuită pentru a forța capitularea fără victime civile.', strength: 6 },
+      { type: 'causal', title: 'Soviet Declaration Mattered More', title_ro: 'Declarația Sovietică a Contat Mai Mult', description: 'Tsuyoshi Hasegawa\'s research shows the Soviet declaration of war on August 8 was more decisive in Japan\'s surrender than the bombs themselves.', description_ro: 'Cercetarea lui Hasegawa arată că declarația de război sovietică din 8 august a fost mai decisivă în capitularea Japoniei decât bombele.', strength: 9 },
+      { type: 'biographical', title: 'Truman\'s Political Motives', title_ro: 'Motivele Politice ale lui Truman', description: 'Truman faced pressure to justify the $2 billion Manhattan Project and to intimidate the Soviet Union \u2014 motives beyond simply ending the war.', description_ro: 'Truman a fost presat să justifice Proiectul Manhattan de 2 miliarde $ și să intimideze URSS \u2014 motive dincolo de simpla încheiere a războiului.', strength: 7 },
+      { type: 'ideological', title: 'Civilian Targeting', title_ro: 'Țintirea Civililor', description: 'International humanitarian principles, even in 1945, recognized distinctions between combatants and civilians. Deliberately targeting cities violated these norms.', description_ro: 'Principiile umanitare internaționale, chiar și în 1945, recunoșteau distincția între combatanți și civili. Țintirea deliberată a orașelor a violat aceste norme.', strength: 7 },
+      { type: 'economic', title: 'Modifying Unconditional Surrender', title_ro: 'Modificarea Capitulării Necondiționate', description: 'Allowing Japan to keep the Emperor (which the US ultimately did anyway) could have ended the war without atomic weapons or invasion.', description_ro: 'Permiterea Japoniei să-și păstreze Împăratul (ceea ce SUA au făcut oricum) ar fi putut încheia războiul fără arme atomice sau invazie.', strength: 8 }
+    ],
+    aiCards: [
+      { type: 'military', title: 'Operation Downfall Casualties', title_ro: 'Victimele Operațiunii Downfall', description: 'Military planners estimated 500,000 to 1 million Allied casualties for a land invasion of Japan, plus millions of Japanese military and civilian deaths.', description_ro: 'Planificatorii militari estimau 500.000-1 milion de victime aliate pentru o invazie terestră a Japoniei, plus milioane de morți japonezi.', strength: 9 },
+      { type: 'causal', title: 'Ending the War Quickly', title_ro: 'Încheierea Rapidă a Războiului', description: 'Every day the war continued, thousands died across Asia. The bombs ended the war in days, saving countless lives in occupied territories.', description_ro: 'În fiecare zi de război mureau mii de oameni în Asia. Bombele au încheiat războiul în câteva zile, salvând nenumărate vieți.', strength: 8 },
+      { type: 'military', title: 'Japanese Military Resistance', title_ro: 'Rezistența Militară Japoneză', description: 'Even after both bombings, Japanese military hardliners attempted a coup to prevent surrender. Without the bombs\' shock, resistance would have been stronger.', description_ro: 'Chiar și după ambele bombardamente, extremiștii militari japonezi au încercat o lovitură de stat. Fără șocul bombelor, rezistența ar fi fost mai puternică.', strength: 7 }
+    ]
+  },
+  {
+    id: 'rome-fall',
+    question: 'Did the Roman Empire Fall Due to Internal Decay?',
+    question_ro: 'A căzut Imperiul Roman din cauza declinului intern?',
+    era: 'Late Antiquity, 3rd-5th Century', era_ro: 'Antichitatea Târzie, Sec. III-V',
+    aiStance: 'Yes \u2014 corruption and decline were the primary causes',
+    aiStance_ro: 'Da \u2014 corupția și declinul au fost cauzele principale',
+    playerStance: 'No \u2014 external pressures were more significant',
+    playerStance_ro: 'Nu \u2014 presiunile externe au fost mai semnificative',
+    playerCards: [
+      { type: 'military', title: 'Barbarian Migrations', title_ro: 'Migrațiile Barbare', description: 'The Hunnic invasions pushed Germanic tribes into Roman territory with unprecedented force. These mass migrations overwhelmed even a healthy empire\'s defenses.', description_ro: 'Invaziile hunilor au împins triburile germanice în teritoriul roman cu forță fără precedent. Aceste migrații în masă au copleșit apărarea imperiului.', strength: 8 },
+      { type: 'causal', title: 'Climate Change Factor', title_ro: 'Factorul Schimbărilor Climatice', description: 'The Late Antique Little Ice Age reduced agricultural yields across the empire, causing famines and weakening resistance to disease and invasion.', description_ro: 'Mica Epocă Glaciară din Antichitatea Târzie a redus recoltele agricole, provocând foamete și slăbind rezistența la boli și invazii.', strength: 7 },
+      { type: 'economic', title: 'Plague of Justinian', title_ro: 'Ciuma lui Iustinian', description: 'The devastating plague of 541-542 killed millions across the Mediterranean, crippling the Eastern Roman Empire\'s attempts to reconquer the West.', description_ro: 'Ciuma devastatoare din 541-542 a ucis milioane în Mediterana, paralizând încercările Imperiului Roman de Răsărit de a recuceri Vestul.', strength: 6 },
+      { type: 'military', title: 'Attila\'s Campaigns', title_ro: 'Campaniile lui Attila', description: 'Attila the Hun\'s devastating campaigns in the 440s-450s destroyed Roman military infrastructure and diverted resources from defending other frontiers.', description_ro: 'Campaniile devastatoare ale lui Attila Hunul în anii 440-450 au distrus infrastructura militară romană și au deviat resurse de la alte frontiere.', strength: 7 },
+      { type: 'ideological', title: 'Transformation Not Fall', title_ro: 'Transformare, Nu Cădere', description: 'Historians like Peter Brown argue Rome didn\'t "fall" but transformed. Roman institutions, law, and culture persisted through successor kingdoms.', description_ro: 'Istorici precum Peter Brown susțin că Roma nu a „căzut", ci s-a transformat. Instituțiile, legile și cultura romană au persistat prin regatele succesoare.', strength: 8 },
+      { type: 'biographical', title: 'Stilicho\'s Execution', title_ro: 'Execuția lui Stilicho', description: 'The execution of the capable general Stilicho in 408 was driven by court politics, but the barbarian threats he faced were real and external in origin.', description_ro: 'Execuția capabilului general Stilicho în 408 a fost determinată de politica curții, dar amenințările barbare cu care se confrunta erau reale și externe.', strength: 6 }
+    ],
+    aiCards: [
+      { type: 'economic', title: 'Currency Debasement', title_ro: 'Devalorizarea Monedei', description: 'Successive emperors debased the currency, causing inflation that destroyed the economy. The silver content of the denarius fell from 95% to under 5%.', description_ro: 'Împărații succesivi au devalorizat moneda, provocând inflație. Conținutul de argint al denarului a scăzut de la 95% la sub 5%.', strength: 8 },
+      { type: 'ideological', title: 'Political Corruption', title_ro: 'Corupția Politică', description: 'The crisis of the 3rd century saw 26 emperors in 50 years. Political instability, corruption, and civil wars made effective governance impossible.', description_ro: 'Criza secolului III a văzut 26 de împărați în 50 de ani. Instabilitatea politică, corupția și războaiele civile au făcut guvernarea imposibilă.', strength: 9 },
+      { type: 'causal', title: 'Over-Extension', title_ro: 'Supraextinderea', description: 'The empire grew too large to govern effectively. Bureaucratic bloat, tax evasion by elites, and the inability to maintain frontier defenses were self-inflicted wounds.', description_ro: 'Imperiul a crescut prea mare pentru a fi guvernat eficient. Birocrația excesivă, evaziunea fiscală a elitelor și incapacitatea de a apăra frontierele au fost răni auto-provocate.', strength: 7 }
+    ]
+  },
+  {
+    id: 'french-revolution',
+    question: 'Was the French Revolution Inevitable?',
+    question_ro: 'A fost Revoluția Franceză inevitabilă?',
+    era: '18th Century France', era_ro: 'Franța Secolului XVIII',
+    aiStance: 'Yes \u2014 social and economic pressures made revolution unavoidable',
+    aiStance_ro: 'Da \u2014 presiunile sociale și economice au făcut revoluția inevitabilă',
+    playerStance: 'No \u2014 reform could have prevented it',
+    playerStance_ro: 'Nu \u2014 reformele o puteau preveni',
+    playerCards: [
+      { type: 'biographical', title: 'Louis XVI\'s Reform Attempts', title_ro: 'Încercările de Reformă ale lui Ludovic XVI', description: 'Louis XVI appointed reformist ministers like Turgot and Necker who proposed meaningful fiscal reforms. Political will for change existed at the highest level.', description_ro: 'Ludovic XVI a numit miniștri reformiști precum Turgot și Necker care au propus reforme fiscale semnificative. Voința politică pentru schimbare exista la cel mai înalt nivel.', strength: 7 },
+      { type: 'economic', title: 'British Comparison', title_ro: 'Comparația cu Marea Britanie', description: 'Britain faced similar fiscal pressures but reformed its institutions without revolution. The French ancien r\u00e9gime could have adapted similarly with gradual reform.', description_ro: 'Marea Britanie s-a confruntat cu presiuni fiscale similare dar și-a reformat instituțiile fără revoluție. Vechiul regim francez se putea adapta similar cu reforme treptate.', strength: 8 },
+      { type: 'causal', title: 'Contingent Financial Crisis', title_ro: 'Criza Financiară Contingentă', description: 'The immediate crisis was caused by French involvement in the American Revolution \u2014 a policy choice, not an inevitable structural failure.', description_ro: 'Criza imediată a fost cauzată de implicarea Franței în Revoluția Americană \u2014 o alegere politică, nu un eșec structural inevitabil.', strength: 7 },
+      { type: 'ideological', title: 'Estates-General Option', title_ro: 'Opțiunea Stărilor Generale', description: 'The Estates-General of 1789 was meant to find solutions. Had the king accepted the National Assembly early, a constitutional monarchy could have emerged peacefully.', description_ro: 'Stările Generale din 1789 urmăreau să găsească soluții. Dacă regele accepta Adunarea Națională devreme, o monarhie constituțională putea apărea pașnic.', strength: 6 },
+      { type: 'military', title: 'Royal Military Strength', title_ro: 'Forța Militară Regală', description: 'The French military remained loyal initially. Had the king not concentrated troops around Paris (provoking fear), the Bastille storming might not have occurred.', description_ro: 'Armata franceză a rămas loială inițial. Dacă regele nu concentra trupe în jurul Parisului (provocând frică), luarea Bastiliei s-ar fi putut evita.', strength: 5 },
+      { type: 'biographical', title: 'Necker\'s Dismissal', title_ro: 'Demiterea lui Necker', description: 'The dismissal of the popular finance minister Necker on July 11, 1789 directly triggered the uprising. This was a choice, not an inevitability.', description_ro: 'Demiterea popularului ministru de finanțe Necker pe 11 iulie 1789 a declanșat direct revolta. Aceasta a fost o alegere, nu o inevitabilitate.', strength: 7 }
+    ],
+    aiCards: [
+      { type: 'economic', title: 'Feudal Tax System', title_ro: 'Sistemul Fiscal Feudal', description: 'The tax system exempted nobles and clergy while crushing peasants and the bourgeoisie. This structural injustice could not be reformed without dismantling privilege.', description_ro: 'Sistemul fiscal scutea nobilimea și clerul în timp ce zdrobea țăranii și burghezia. Această nedreptate structurală nu putea fi reformată fără desființarea privilegiilor.', strength: 9 },
+      { type: 'ideological', title: 'Enlightenment Ideas', title_ro: 'Ideile Iluminismului', description: 'Voltaire, Rousseau, and Montesquieu had fundamentally undermined the intellectual legitimacy of absolute monarchy. You cannot un-think revolutionary ideas.', description_ro: 'Voltaire, Rousseau și Montesquieu subminaseră fundamental legitimitatea intelectuală a monarhiei absolute. Nu poți „des-gândi" ideile revoluționare.', strength: 8 },
+      { type: 'causal', title: 'Harvest Failures', title_ro: 'Recoltele Eșuate', description: 'The terrible harvest of 1788 caused bread prices to spike 88%. With half of income spent on bread, mass hunger made uprising inevitable regardless of politics.', description_ro: 'Recolta teribilă din 1788 a cauzat creșterea prețului pâinii cu 88%. Cu jumătate din venituri cheltuită pe pâine, foametea a făcut revolta inevitabilă.', strength: 7 }
+    ]
+  }
+];
+
+// ── CARD TYPE SVG ICONS ──
+function getTypeIcon(type) {
+  const icons = {
+    causal: '<svg viewBox="0 0 12 12" fill="none"><path d="M2 6h3m2 0h3M6 2v3m0 2v3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><circle cx="6" cy="6" r="1" fill="currentColor"/></svg>',
+    economic: '<svg viewBox="0 0 12 12" fill="none"><path d="M2 9 L4 5 L6 7 L8 3 L10 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/><line x1="2" y1="10" x2="10" y2="10" stroke="currentColor" stroke-width="0.8" opacity="0.5"/></svg>',
+    military: '<svg viewBox="0 0 12 12" fill="none"><path d="M6 1 L6 8 M3 4 L6 1 L9 4" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 10 L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    ideological: '<svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="5" r="3" stroke="currentColor" stroke-width="1" fill="none"/><path d="M4.5 5 L5.5 6 L7.5 4" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 8v2" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
+    biographical: '<svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2" stroke="currentColor" stroke-width="1" fill="none"/><path d="M3 10 C3 7.5 9 7.5 9 10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>'
+  };
+  return icons[type] || '';
+}
+
+// ── GAME STATE ──
+let currentTopic = null;
+let selectedCards = [];
+let playerScore = 0;
+let aiScore = 0;
+let timerInterval = null;
+let timeLeft = 90;
+let rebuttalResponseQuality = null; // 'strong', 'weak', 'trap'
+let playerContradicted = false;
+
+// ── APPLY LANGUAGE (must be after TOPICS & currentTopic declarations) ──
+applyArenaLanguage(arenaLang);
+
+// ── SCREEN MANAGEMENT ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── TOPIC SELECT ──
+function showTopicSelect() {
+  const grid = document.getElementById('topicGrid');
+  grid.innerHTML = '';
+  TOPICS.forEach((topic, i) => {
+    const row = document.createElement('div');
+    row.className = 'topic-row';
+    row.onclick = () => selectTopic(i);
+    row.innerHTML =
+      '<div class="topic-num">' + (i + 1) + '</div>' +
+      '<div class="topic-info">' +
+        '<div class="topic-question">' + topicQ(topic) + '</div>' +
+        '<div class="topic-era">' + topicEra(topic) + '</div>' +
+      '</div>' +
+      '<div class="topic-arrow"><svg viewBox="0 0 20 20" fill="none"><path d="M7 4 L13 10 L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+    grid.appendChild(row);
+  });
+  showScreen('screenTopicSelect');
+}
+
+// ── SELECT TOPIC & ENTER LOBBY ──
+function selectTopic(index) {
+  currentTopic = TOPICS[index];
+  selectedCards = [];
+  playerScore = 0;
+  aiScore = 0;
+  rebuttalResponseQuality = null;
+  playerContradicted = false;
+
+  document.getElementById('lobbyTopic').textContent = topicQ(currentTopic);
+  document.getElementById('lobbyAiStance').textContent = topicAiStance(currentTopic);
+  document.getElementById('lobbyPlayerStance').textContent = topicPlayerStance(currentTopic);
+
+  renderLobbyCards();
+  startTimer();
+  updateReadyButton();
+  showScreen('screenLobby');
+}
+
+function renderLobbyCards() {
+  const grid = document.getElementById('lobbyCards');
+  grid.innerHTML = '';
+  currentTopic.playerCards.forEach((card, i) => {
+    const el = document.createElement('div');
+    el.className = 'arg-card' + (selectedCards.includes(i) ? ' selected' : '') + (selectedCards.length >= 3 && !selectedCards.includes(i) ? ' disabled' : '');
+    el.setAttribute('data-type', card.type);
+    el.onclick = () => toggleCard(i);
+
+    let dots = '';
+    for (let d = 0; d < 10; d++) {
+      dots += '<div class="strength-dot' + (d < card.strength ? ' filled' : '') + '"></div>';
+    }
+
+    el.innerHTML =
+      '<div class="arg-card-type">' + getTypeIcon(card.type) + cardType(card) + '</div>' +
+      '<div class="arg-card-title">' + cardTitle(card) + '</div>' +
+      '<div class="arg-card-desc">' + cardDesc(card) + '</div>' +
+      '<div class="arg-card-strength"><span>' + at('strength') + '</span><div class="strength-dots">' + dots + '</div></div>';
+    grid.appendChild(el);
+  });
+}
+
+function toggleCard(index) {
+  if (selectedCards.includes(index)) {
+    selectedCards = selectedCards.filter(i => i !== index);
+  } else if (selectedCards.length < 3) {
+    selectedCards.push(index);
+  }
+  renderLobbyCards();
+  updateReadyButton();
+}
+
+function updateReadyButton() {
+  const btn = document.getElementById('btnReady');
+  if (selectedCards.length === 3) {
+    btn.disabled = false;
+    btn.textContent = at('readyBtn');
+  } else {
+    var remaining = 3 - selectedCards.length;
+    btn.disabled = true;
+    btn.textContent = at('selectMore1') + remaining + (remaining !== 1 ? at('selectMore2s') : at('selectMore2'));
+  }
+}
+
+// ── TIMER ──
+function startTimer() {
+  timeLeft = 90;
+  clearInterval(timerInterval);
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      if (selectedCards.length < 3) {
+        // Auto-select remaining cards
+        const available = currentTopic.playerCards.map((_, i) => i).filter(i => !selectedCards.includes(i));
+        while (selectedCards.length < 3 && available.length > 0) {
+          const rand = Math.floor(Math.random() * available.length);
+          selectedCards.push(available.splice(rand, 1)[0]);
+        }
+        renderLobbyCards();
+        updateReadyButton();
+      }
+      startDebate();
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(timeLeft / 60);
+  const s = timeLeft % 60;
+  const display = document.getElementById('lobbyTimer');
+  display.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  display.className = 'timer-display' + (timeLeft <= 15 ? ' warning' : '');
+  document.getElementById('timerBarFill').style.width = ((timeLeft / 90) * 100) + '%';
+}
+
+// ── ROUND 1: OPENING ARGUMENTS ──
+function startDebate() {
+  clearInterval(timerInterval);
+  const playerHand = selectedCards.map(i => currentTopic.playerCards[i]);
+  const aiHand = currentTopic.aiCards;
+
+  // Score cards
+  let pScore = 0, aScore = 0;
+  playerHand.forEach(c => {
+    const validity = c.strength;
+    const coherence = Math.max(3, c.strength + Math.floor(Math.random() * 3) - 1);
+    pScore += Math.round((validity + coherence) / 2) * 5;
+  });
+  aiHand.forEach(c => {
+    const validity = c.strength;
+    const coherence = Math.max(3, c.strength + Math.floor(Math.random() * 3) - 1);
+    aScore += Math.round((validity + coherence) / 2) * 5;
+  });
+
+  playerScore = pScore;
+  aiScore = aScore;
+
+  document.getElementById('r1PlayerScore').textContent = playerScore;
+  document.getElementById('r1AiScore').textContent = aiScore;
+
+  // Render battle area
+  const area = document.getElementById('r1BattleArea');
+  area.innerHTML = '';
+
+  const playerSide = document.createElement('div');
+  playerSide.className = 'battle-side';
+  playerSide.innerHTML = '<div class="side-label player-side">' + at('yourArgs') + '</div>';
+  playerHand.forEach((card, i) => {
+    const el = document.createElement('div');
+    el.className = 'battle-card';
+    el.setAttribute('data-type', card.type);
+    el.style.animationDelay = (i * 0.2) + 's';
+    el.innerHTML =
+      '<div class="arg-card-type">' + getTypeIcon(card.type) + cardType(card) + '</div>' +
+      '<div class="arg-card-title">' + cardTitle(card) + '</div>' +
+      '<div class="arg-card-desc">' + cardDesc(card) + '</div>';
+    playerSide.appendChild(el);
+  });
+
+  const vs = document.createElement('div');
+  vs.className = 'vs-divider';
+  vs.innerHTML = '<div class="vs-text">VS</div>';
+
+  const aiSide = document.createElement('div');
+  aiSide.className = 'battle-side';
+  aiSide.innerHTML = '<div class="side-label ai-side">' + at('aiArgs') + '</div>';
+  aiHand.forEach((card, i) => {
+    const el = document.createElement('div');
+    el.className = 'battle-card ai-card';
+    el.setAttribute('data-type', card.type);
+    el.style.animationDelay = (0.6 + i * 0.2) + 's';
+    el.innerHTML =
+      '<div class="arg-card-type">' + getTypeIcon(card.type) + cardType(card) + '</div>' +
+      '<div class="arg-card-title">' + cardTitle(card) + '</div>' +
+      '<div class="arg-card-desc">' + cardDesc(card) + '</div>';
+    aiSide.appendChild(el);
+  });
+
+  area.appendChild(playerSide);
+  area.appendChild(vs);
+  area.appendChild(aiSide);
+
+  // Show continue button after delay
+  setTimeout(() => {
+    var r2btn = document.getElementById('btnToRound2');
+    r2btn.textContent = at('continueR2');
+    r2btn.style.display = 'inline-flex';
+  }, 1500);
+
+  showScreen('screenRound1');
+}
+
+// ── ROUND 2: REBUTTAL ──
+async function startRound2() {
+  document.getElementById('r2PlayerScore').textContent = playerScore;
+  document.getElementById('r2AiScore').textContent = aiScore;
+  showScreen('screenRound2');
+
+  const targetCard = currentTopic.playerCards[selectedCards[Math.floor(Math.random() * selectedCards.length)]];
+
+  // Try Gemini for rebuttal
+  const langInstruction = arenaLang === 'ro'
+    ? 'IMPORTANT: Write everything in Romanian (limba română).'
+    : 'Write in English.';
+  const rebuttalPrompt = `You are a friendly AI debater in a history education game for high school students.
+The debate topic is: "${topicQ(currentTopic)}"
+You are arguing: "${topicAiStance(currentTopic)}"
+The student argued: "${cardTitle(targetCard)}" - "${cardDesc(targetCard)}"
+
+Generate a JSON response with:
+1. "question": A clear, direct challenge to the student's argument (1 short sentence, conversational tone, easy to understand)
+2. "options": Array of 4 objects with "text" (1 clear sentence each, simple language) and "quality" (one "strong", two "weak", one "trap")
+
+IMPORTANT rules for difficulty:
+- Use simple, clear language a high school student can easily understand
+- The "strong" answer should use well-known historical facts, not obscure details
+- The "weak" answers should be vague or miss the point but not be confusing
+- The "trap" answer should contain an obvious factual error (wrong date, wrong person, wrong event)
+- Keep each answer option to ONE short sentence maximum
+- ${langInstruction}
+
+Return ONLY valid JSON, no markdown.`;
+
+  let rebuttalData = null;
+  const geminiResult = await callGemini(rebuttalPrompt);
+
+  if (geminiResult) {
+    try {
+      // Try to extract JSON from the response
+      let jsonStr = geminiResult;
+      const jsonMatch = geminiResult.match(/\{[\s\S]*\}/);
+      if (jsonMatch) jsonStr = jsonMatch[0];
+      rebuttalData = JSON.parse(jsonStr);
+    } catch(e) {
+      console.error('Failed to parse Gemini rebuttal:', e);
+    }
+  }
+
+  // Fallback
+  if (!rebuttalData || !rebuttalData.question || !rebuttalData.options || rebuttalData.options.length < 4) {
+    rebuttalData = arenaLang === 'ro' ? {
+      question: 'Argumentul tău despre „' + cardTitle(targetCard) + '" ignoră dovezi importante. Ce zici de forțele mai mari care făceau acest rezultat foarte probabil?',
+      options: [
+        { text: 'Forțele structurale existau, dar deciziile individuale au contat la fel de mult \u2014 crize similare au fost rezolvate pașnic.', quality: 'strong' },
+        { text: 'E o situație complicată cu mulți factori de luat în considerare.', quality: 'weak' },
+        { text: 'De fapt, majoritatea istoricilor spun că totul a fost despre conflictele personale dintre lideri.', quality: 'trap' },
+        { text: 'Forțele structurale sunt un concept modern pe care oamenii de atunci nu l-ar fi înțeles.', quality: 'weak' }
+      ]
+    } : {
+      question: 'Your argument about "' + cardTitle(targetCard) + '" ignores important evidence. What about the bigger forces that made this outcome very likely?',
+      options: [
+        { text: 'Structural forces existed, but individual decisions mattered just as much \u2014 similar crises were resolved peacefully.', quality: 'strong' },
+        { text: 'It\'s a complicated situation with many factors to consider.', quality: 'weak' },
+        { text: 'Actually, most historians say it was all about personal conflicts between leaders.', quality: 'trap' },
+        { text: 'Structural forces are a modern concept that people back then wouldn\'t have understood.', quality: 'weak' }
+      ]
+    };
+  }
+
+  // Shuffle options
+  const shuffled = [...rebuttalData.options].sort(() => Math.random() - 0.5);
+
+  const content = document.getElementById('rebuttalContent');
+  const letters = ['A', 'B', 'C', 'D'];
+
+  content.innerHTML =
+    '<div class="rebuttal-question">' +
+      '<div class="rebuttal-ai-label">' + at('aiChallenges') + '</div>' +
+      '<div class="rebuttal-text">"' + rebuttalData.question + '"</div>' +
+      '<div class="rebuttal-target">' + at('targetingCard') + ' ' + cardTitle(targetCard) + '</div>' +
+    '</div>' +
+    '<div class="response-options" id="responseOptions">' +
+      shuffled.map((opt, i) =>
+        '<div class="response-option" data-quality="' + opt.quality + '" data-index="' + i + '" onclick="selectResponse(this)">' +
+          '<div class="response-option-letter">' + letters[i] + '</div>' +
+          '<div class="response-option-text">' + opt.text + '</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+}
+
+function selectResponse(el) {
+  if (document.querySelector('.response-option.selected-correct, .response-option.selected-wrong, .response-option.selected-trap')) return;
+
+  const quality = el.getAttribute('data-quality');
+  rebuttalResponseQuality = quality;
+
+  // Apply styles
+  if (quality === 'strong') {
+    el.classList.add('selected-correct');
+    playerScore += 40;
+  } else if (quality === 'weak') {
+    el.classList.add('selected-wrong');
+    aiScore += 20;
+  } else if (quality === 'trap') {
+    el.classList.add('selected-trap');
+    aiScore += 35;
+    playerContradicted = true;
+  }
+
+  // Reveal the correct answer
+  document.querySelectorAll('.response-option').forEach(opt => {
+    if (opt.getAttribute('data-quality') === 'strong' && opt !== el) {
+      opt.classList.add('revealed-correct');
+    }
+    opt.style.cursor = 'default';
+  });
+
+  document.getElementById('r2PlayerScore').textContent = playerScore;
+  document.getElementById('r2AiScore').textContent = aiScore;
+
+  // Add continue button
+  const container = document.getElementById('rebuttalContent');
+  const btn = document.createElement('button');
+  btn.className = 'btn-continue';
+  btn.textContent = at('continueFinal');
+  btn.style.marginTop = '1rem';
+  btn.onclick = startRound3;
+  container.appendChild(btn);
+}
+
+// ── ROUND 3: FINAL EVIDENCE ──
+function startRound3() {
+  document.getElementById('r3PlayerScore').textContent = playerScore;
+  document.getElementById('r3AiScore').textContent = aiScore;
+  showScreen('screenRound3');
+
+  const content = document.getElementById('round3Content');
+
+  // Player picks a remaining card (not already selected)
+  const remainingIndices = currentTopic.playerCards.map((_, i) => i).filter(i => !selectedCards.includes(i));
+  // For simplicity, show remaining cards to pick from
+  let pickHTML = '<div class="side-label player-side" style="text-align:center;margin-bottom:0.8rem;">' + at('chooseFinal') + '</div>';
+  pickHTML += '<div class="arg-cards-grid" style="max-width:700px;margin:0 auto 1.5rem;">';
+  remainingIndices.forEach(idx => {
+    const card = currentTopic.playerCards[idx];
+    let dots = '';
+    for (let d = 0; d < 10; d++) {
+      dots += '<div class="strength-dot' + (d < card.strength ? ' filled' : '') + '"></div>';
+    }
+    pickHTML += '<div class="arg-card" data-type="' + card.type + '" onclick="playFinalCard(' + idx + ')" style="cursor:pointer;">' +
+      '<div class="arg-card-type">' + getTypeIcon(card.type) + cardType(card) + '</div>' +
+      '<div class="arg-card-title">' + cardTitle(card) + '</div>' +
+      '<div class="arg-card-desc">' + cardDesc(card) + '</div>' +
+      '<div class="arg-card-strength"><span>' + at('strength') + '</span><div class="strength-dots">' + dots + '</div></div>' +
+    '</div>';
+  });
+  pickHTML += '</div>';
+  content.innerHTML = pickHTML;
+}
+
+function playFinalCard(idx) {
+  const playerCard = currentTopic.playerCards[idx];
+  const content = document.getElementById('round3Content');
+
+  // Score final cards
+  const pBonus = playerCard.strength * 5;
+  playerScore += pBonus;
+
+  // AI plays a card
+  let aiCardText, aiBonus;
+  if (playerContradicted) {
+    // AI plays contradicting card
+    aiCardText = {
+      type: 'causal',
+      title: at('contradictionTitle'),
+      description: at('contradictionDesc')
+    };
+    aiBonus = 30;
+    aiScore += aiBonus;
+  } else {
+    // Normal AI final card - generate a good one
+    aiCardText = {
+      type: currentTopic.aiCards[0].type,
+      title: at('closingTitle'),
+      description: at('closingDesc')
+    };
+    aiBonus = Math.floor(Math.random() * 3 + 6) * 5;
+    aiScore += aiBonus;
+  }
+
+  content.innerHTML =
+    '<div class="evidence-drop-area">' +
+      '<div class="evidence-card-slot">' +
+        '<div class="side-label player-side">' + at('yourFinalEvidence') + '</div>' +
+        '<div class="battle-card" data-type="' + playerCard.type + '">' +
+          '<div class="arg-card-type">' + getTypeIcon(playerCard.type) + cardType(playerCard) + '</div>' +
+          '<div class="arg-card-title">' + cardTitle(playerCard) + '</div>' +
+          '<div class="arg-card-desc">' + cardDesc(playerCard) + '</div>' +
+          '<div style="margin-top:0.5rem;font-size:0.65rem;color:var(--accent-teal);">+' + pBonus + ' ' + at('points') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="vs-divider"><div class="vs-text">VS</div></div>' +
+      '<div class="evidence-card-slot">' +
+        '<div class="side-label ai-side">' + at('aiFinalEvidence') + '</div>' +
+        '<div class="battle-card ai-card" data-type="' + aiCardText.type + '">' +
+          '<div class="arg-card-type">' + getTypeIcon(aiCardText.type) + at(aiCardText.type) + '</div>' +
+          '<div class="arg-card-title">' + aiCardText.title + '</div>' +
+          '<div class="arg-card-desc">' + aiCardText.description + '</div>' +
+          (playerContradicted ? '<div style="margin-top:0.5rem;font-size:0.65rem;color:var(--accent-rose);">' + at('contradictionPenalty') + ' -30 ' + at('points') + '</div>' : '<div style="margin-top:0.5rem;font-size:0.65rem;color:var(--accent-rose);">+' + aiBonus + ' ' + at('points') + '</div>') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="score-panel" style="margin-top:1rem;">' +
+      '<div class="score-box"><div class="score-box-label">' + at('yourFinalScore') + '</div><div class="score-box-value player-score">' + playerScore + '</div></div>' +
+      '<div class="score-box"><div class="score-box-label">' + at('aiFinalScore') + '</div><div class="score-box-value ai-score">' + aiScore + '</div></div>' +
+    '</div>';
+
+  document.getElementById('r3PlayerScore').textContent = playerScore;
+  document.getElementById('r3AiScore').textContent = aiScore;
+
+  const btn = document.createElement('button');
+  btn.className = 'btn-continue';
+  btn.textContent = at('seeResults');
+  btn.style.marginTop = '1rem';
+  btn.onclick = showPostMatch;
+  content.appendChild(btn);
+}
+
+// ── POST MATCH ──
+async function showPostMatch() {
+  const won = playerScore >= aiScore;
+
+  // Winner announcement
+  const announcement = document.getElementById('winnerAnnouncement');
+  if (won) {
+    announcement.innerHTML =
+      '<div class="winner-icon"><svg viewBox="0 0 64 64" fill="none">' +
+        '<circle cx="32" cy="32" r="28" stroke="#d4a853" stroke-width="1.5" fill="none" opacity="0.3"/>' +
+        '<circle cx="32" cy="32" r="22" stroke="#d4a853" stroke-width="1" fill="none" opacity="0.2"/>' +
+        '<path d="M22 38 L28 26 L32 32 L36 26 L42 38" stroke="#f0d48a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<path d="M27 38 L32 44 L37 38" stroke="#f0d48a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<circle cx="32" cy="20" r="2" fill="#f0d48a" opacity="0.8"/>' +
+      '</svg></div>' +
+      '<div class="winner-text win">' + at('victory') + '</div>' +
+      '<div class="winner-sub">' + at('winSub1') + playerScore + at('winSub2') + aiScore + '</div>';
+  } else {
+    announcement.innerHTML =
+      '<div class="winner-icon"><svg viewBox="0 0 64 64" fill="none">' +
+        '<circle cx="32" cy="32" r="28" stroke="#c45c5c" stroke-width="1.5" fill="none" opacity="0.3"/>' +
+        '<path d="M24 24 L40 40 M40 24 L24 40" stroke="#c45c5c" stroke-width="2" stroke-linecap="round"/>' +
+      '</svg></div>' +
+      '<div class="winner-text loss">' + at('defeat') + '</div>' +
+      '<div class="winner-sub">' + at('lossSub1') + aiScore + at('winSub2') + playerScore + '</div>';
+  }
+
+  // XP calculation
+  let baseXP = won ? 50 : 10;
+  let evidenceBonus = 0;
+  if (won) {
+    selectedCards.forEach(i => {
+      const s = currentTopic.playerCards[i].strength;
+      if (s >= 8) evidenceBonus += 10;
+      else if (s >= 6) evidenceBonus += 5;
+    });
+    evidenceBonus = Math.min(evidenceBonus, 30);
+  }
+  let noContradictionBonus = (!playerContradicted && won) ? 20 : 0;
+  const totalXP = baseXP + evidenceBonus + noContradictionBonus;
+
+  // XP breakdown
+  const xpDiv = document.getElementById('xpBreakdown');
+  xpDiv.innerHTML =
+    '<div class="xp-row"><div class="xp-row-label">' + (won ? at('victoryBonus') : at('participation')) + '</div><div class="xp-row-value">+' + baseXP + ' XP</div></div>' +
+    (evidenceBonus > 0 ? '<div class="xp-row"><div class="xp-row-label">' + at('evidenceQuality') + '</div><div class="xp-row-value">+' + evidenceBonus + ' XP</div></div>' : '') +
+    (noContradictionBonus > 0 ? '<div class="xp-row"><div class="xp-row-label">' + at('noContradictions') + '</div><div class="xp-row-value">+' + noContradictionBonus + ' XP</div></div>' : '') +
+    '<div class="xp-row total"><div class="xp-row-label">' + at('totalEarned') + '</div><div class="xp-row-value">+' + totalXP + ' XP</div></div>';
+
+  showScreen('screenPostMatch');
+
+  // Award XP via server
+  try {
+    const token = localStorage.getItem('cl_token');
+    const res = await fetch(window.location.origin + '/api/xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ amount: totalXP })
+    });
+    const data = await res.json();
+    if (data && data.xp !== undefined) {
+      const user = JSON.parse(localStorage.getItem('cl_user'));
+      user.xp = data.xp;
+      user.level = data.level;
+      user.title = data.title;
+      localStorage.setItem('cl_user', JSON.stringify(user));
+      localStorage.setItem('cl_streak', data.streak.toString());
+      updateProfileDisplay(user);
+    }
+  } catch(e) {
+    // Silently fail - XP will be synced later
+    console.log('XP sync failed:', e);
+  }
+
+  // Get Historian's Verdict from Gemini
+  const verdictLangNote = arenaLang === 'ro' ? '\nIMPORTANT: Write the entire verdict in Romanian (limba română). Use simple, clear language.' : '';
+  const verdictPrompt = `You are a historian providing a balanced verdict on a debate about: "${topicQ(currentTopic)}"
+
+Side A (AI) argued: "${topicAiStance(currentTopic)}"
+Side B (Player) argued: "${topicPlayerStance(currentTopic)}"
+
+The ${won ? 'player' : 'AI'} won with a score of ${won ? playerScore : aiScore} to ${won ? aiScore : playerScore}.
+
+Write a 3-4 sentence "Historian's Verdict" paragraph that:
+1. Acknowledges the historical consensus on this question
+2. Notes where both sides had merit
+3. Highlights what the strongest evidence actually suggests
+
+Write in a scholarly but accessible tone. Do NOT use markdown formatting. Just plain text.${verdictLangNote}`;
+
+  const verdictResult = await callGemini(verdictPrompt);
+  const verdictEl = document.getElementById('verdictText');
+
+  if (verdictResult) {
+    verdictEl.textContent = verdictResult;
+  } else {
+    verdictEl.textContent = 'This remains one of history\'s most debated questions. Both sides presented compelling evidence, and the historical record supports elements of each argument. The consensus among modern historians acknowledges the interplay of structural forces and individual agency, suggesting that while conditions created the possibility, specific decisions and contingent events shaped the actual outcome.';
+  }
+}
+
+function playAgain() {
+  showTopicSelect();
+}
+
+function backToArena() {
+  showScreen('screenModeSelect');
+}
+</script>
+</body>
+</html>
