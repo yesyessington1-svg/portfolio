@@ -4,10 +4,10 @@ import { SmoothScroll } from "@/components/site/smooth-scroll";
 import { site } from "@/content/site";
 
 export const metadata: Metadata = {
-  title: `${site.name} — ${site.role}`,
+  title: `${site.name} | ${site.role}`,
   description: site.subhead,
   openGraph: {
-    title: `${site.name} — ${site.role}`,
+    title: `${site.name} | ${site.role}`,
     description: site.subhead,
     type: "website",
   },
