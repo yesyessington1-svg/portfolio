@@ -86,7 +86,7 @@ export const site = {
       stack: ["TypeScript", "React", "Node", "Postgres", "Voice AI"],
       shot: "/media/listo-dashboard.jpg",
       featured: true,
-      href: "",
+      href: "https://listo-solutions.ro",
     },
     {
       title: "CYBER_BREACH",
